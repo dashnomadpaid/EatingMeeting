@@ -16,6 +16,7 @@ import { translateCategory, translateBudget } from '@/lib/places';
 import { useThreads } from '@/hooks/useChat';
 import { Avatar } from '@/components/Avatar';
 import { usePlaceParticipants } from '@/hooks/usePlaceParticipants';
+import { ScreenHeader } from '@/components/ScreenHeader';
 
 function normalizePlaceTypeLabel(type?: string | null) {
   if (!type) return null;
@@ -112,100 +113,111 @@ export default function PlaceDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: display.title, headerShown: true }} />
-      <ScrollView style={styles.container}>
-        {display.image ? (
-          <Image source={{ uri: display.image }} style={styles.image} />
-        ) : (
-          <View style={[styles.image, styles.imagePlaceholder]}>
-            <Text style={styles.imagePlaceholderText}>이미지가 아직 없어요</Text>
-          </View>
-        )}
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.screen}>
+        <ScreenHeader
+          title={display.title}
+          backAlwaysVisible
+          onBackPress={() => router.back()}
+        />
+        <ScrollView style={styles.container}>
+          {display.image ? (
+            <Image source={{ uri: display.image }} style={styles.image} />
+          ) : (
+            <View style={[styles.image, styles.imagePlaceholder]}>
+              <Text style={styles.imagePlaceholderText}>이미지가 아직 없어요</Text>
+            </View>
+          )}
 
-        <View style={styles.content}>
-          <Text style={styles.title}>{display.title}</Text>
-          {display.secondaryTitle ? (
-            <Text style={styles.secondaryTitle}>{display.secondaryTitle}</Text>
-          ) : null}
-          {display.subtitle ? <Text style={styles.subtitle}>{display.subtitle}</Text> : null}
-
-          <View style={styles.tagRow}>
-            {display.rating ? (
-              <View style={styles.ratingPill}>
-                <Text style={styles.ratingText}>⭐ {display.rating.toFixed(1)}</Text>
-                {display.ratingCount ? (
-                  <Text style={styles.ratingCount}> ({display.ratingCount})</Text>
-                ) : null}
-              </View>
+          <View style={styles.content}>
+            <Text style={styles.title}>{display.title}</Text>
+            {display.secondaryTitle ? (
+              <Text style={styles.secondaryTitle}>{display.secondaryTitle}</Text>
             ) : null}
-            {display.tags.map((tag) => (
-              <View key={tag.label} style={styles.tagItem}>
-                <Tag label={tag.label} type={tag.type} />
-              </View>
-            ))}
-          </View>
+            {display.subtitle ? <Text style={styles.subtitle}>{display.subtitle}</Text> : null}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>함께 가고 싶은 사람들</Text>
-            {participantsLoading ? (
-              <View style={styles.participantsLoading}>
-                <ActivityIndicator size="small" color="#FF6B35" />
-              </View>
-            ) : participants.length ? (
-              <>
-                <View style={styles.participantsRow}>
-                  {participants.slice(0, 5).map((participant, index) => (
-                    <View
-                      key={participant.profile.id}
-                      style={[styles.avatarWrapper, index === 0 ? null : styles.avatarOverlap]}
-                    >
-                      <Avatar
-                        size="small"
-                        name={participant.profile.display_name}
-                        uri={participant.profile.primaryPhoto?.url}
-                      />
-                    </View>
-                  ))}
-                  {participants.length > 5 ? (
-                    <View
-                      style={[
-                        styles.avatarMore,
-                        participants.length ? styles.avatarOverlap : null,
-                      ]}
-                    >
-                      <Text style={styles.avatarMoreText}>+{participants.length - 5}</Text>
-                    </View>
+            <View style={styles.tagRow}>
+              {display.rating ? (
+                <View style={styles.ratingPill}>
+                  <Text style={styles.ratingText}>⭐ {display.rating.toFixed(1)}</Text>
+                  {display.ratingCount ? (
+                    <Text style={styles.ratingCount}> ({display.ratingCount})</Text>
                   ) : null}
                 </View>
-                <Text style={styles.participantsCaption}>
-                  {participants.length}명이 이 장소에서 밥을 먹고 싶어해요.
+              ) : null}
+              {display.tags.map((tag) => (
+                <View key={tag.label} style={styles.tagItem}>
+                  <Tag label={tag.label} type={tag.type} />
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>함께 가고 싶은 사람들</Text>
+              {participantsLoading ? (
+                <View style={styles.participantsLoading}>
+                  <ActivityIndicator size="small" color="#FF6B35" />
+                </View>
+              ) : participants.length ? (
+                <>
+                  <View style={styles.participantsRow}>
+                    {participants.slice(0, 5).map((participant, index) => (
+                      <View
+                        key={participant.profile.id}
+                        style={[styles.avatarWrapper, index === 0 ? null : styles.avatarOverlap]}
+                      >
+                        <Avatar
+                          size="small"
+                          name={participant.profile.display_name}
+                          uri={participant.profile.primaryPhoto?.url}
+                        />
+                      </View>
+                    ))}
+                    {participants.length > 5 ? (
+                      <View
+                        style={[
+                          styles.avatarMore,
+                          participants.length ? styles.avatarOverlap : null,
+                        ]}
+                      >
+                        <Text style={styles.avatarMoreText}>+{participants.length - 5}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.participantsCaption}>
+                    {participants.length}명이 이 장소에서 밥을 먹고 싶어해요.
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.participantsEmpty}>
+                  아직 신청한 사람이 없어요. 첫 번째로 제안해보세요!
                 </Text>
-              </>
-            ) : (
-              <Text style={styles.participantsEmpty}>
-                아직 신청한 사람이 없어요. 첫 번째로 제안해보세요!
-              </Text>
-            )}
-            {participantsError ? (
-              <Text style={styles.participantsError}>{participantsError}</Text>
-            ) : null}
-          </View>
+              )}
+              {participantsError ? (
+                <Text style={styles.participantsError}>{participantsError}</Text>
+              ) : null}
+            </View>
 
-          <View style={[styles.section, styles.infoSection]}>
-            <Text style={styles.sectionTitle}>장소 정보</Text>
-            <Text style={styles.description}>{display.description}</Text>
-          </View>
+            <View style={[styles.section, styles.infoSection]}>
+              <Text style={styles.sectionTitle}>장소 정보</Text>
+              <Text style={styles.description}>{display.description}</Text>
+            </View>
 
-          <View style={styles.ctaSection}>
-            <Button title="같이 식사 제안하기" onPress={handlePropose} />
+            <View style={styles.ctaSection}>
+              <Button title="같이 식사 제안하기" onPress={handlePropose} />
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
