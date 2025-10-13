@@ -4,6 +4,10 @@ import { PlaceFilters } from '@/types/models';
 import { Coordinates } from '@/lib/geo';
 import type { Place as GooglePlace } from '@/services/places.google';
 
+function formatPlaceId(id?: string | null) {
+  return id ?? 'none';
+}
+
 interface MapState {
   currentLocation: Coordinates | null;
   places: Place[];
@@ -39,5 +43,23 @@ export const useMapStore = create<MapState>((set) => ({
     })),
 
   selectPlace: (place) => set({ selectedPlace: place }),
-  setSelectedGooglePlace: (place) => set({ selectedGooglePlace: place }),
+  setSelectedGooglePlace: (place) =>
+    set((state) => {
+      const prev = state.selectedGooglePlace;
+      console.log(
+        `[MAP] selection call prev=${formatPlaceId(prev?.id)} next=${formatPlaceId(place?.id)}`,
+      );
+      if (prev?.id === place?.id) {
+        console.log(`[MAP] selection unchanged id=${formatPlaceId(prev?.id)}`);
+        return state;
+      }
+      if (!prev && !place) {
+        console.log('[MAP] selection already empty');
+        return state;
+      }
+      console.log(
+        `[MAP] selection update ${formatPlaceId(prev?.id)} -> ${formatPlaceId(place?.id)}`,
+      );
+      return { selectedGooglePlace: place };
+    }),
 }));

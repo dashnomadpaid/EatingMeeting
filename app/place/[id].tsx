@@ -28,10 +28,8 @@ function normalizePlaceTypeLabel(type?: string | null) {
 export default function PlaceDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const placeId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const { selectedPlace, selectedGooglePlace } = useMapStore((state) => ({
-    selectedPlace: state.selectedPlace,
-    selectedGooglePlace: state.selectedGooglePlace,
-  }));
+  const selectedPlace = useMapStore((state) => state.selectedPlace);
+  const selectedGooglePlace = useMapStore((state) => state.selectedGooglePlace);
   const { threads } = useThreads();
 
   const googlePlace =

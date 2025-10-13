@@ -17,7 +17,7 @@ interface AuthState {
   fetchProfile: (userId: string) => Promise<Profile | null>;
 }
 
-function buildFallbackProfile(userId: string, session?: Session | null): Profile {
+export function buildFallbackProfile(userId: string, session?: Session | null): Profile {
   const fallbackUser = session?.user;
   const now = new Date().toISOString();
   const metadata = (fallbackUser?.user_metadata ?? {}) as Record<string, unknown>;
@@ -144,13 +144,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // Safety: ensure loading never hangs indefinitely.
       safety = setTimeout(() => {
-        console.log('[AUTH:init] safety-timeout → loading=false');
+        console.log('[AUTH] init timeout -> loading=false');
         try { set({ loading: false }); } catch {}
       }, 5000);
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      console.log('[AUTH:init] session=', session?.user?.id ?? null);
+  console.log(`[AUTH] init session=${session?.user?.id ?? 'none'}`);
       set({ session });
 
       if (session?.user) {
@@ -159,7 +159,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ profile: null, profileChecked: false, profileError: false });
       }
     } finally {
-      console.log('[AUTH:init] loading=false');
+  console.log('[AUTH] init loading=false');
       set({ loading: false });
       try { if (safety) clearTimeout(safety); } catch {}
     }

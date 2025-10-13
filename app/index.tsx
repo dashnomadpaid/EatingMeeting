@@ -6,11 +6,11 @@ import { useAuth } from '@/hooks/useAuth';
 export default function Gate() {
   const { session, profile, loading, profileChecked, profileError } = useAuth();
   useEffect(() => {
-    console.log('[GATE] state', {
-      loading,
-      session: session?.user?.id ?? null,
-      profile: (profile as any)?.id ?? null,
-    });
+    const sessionId = session?.user?.id ?? null;
+    const profileId = (profile as any)?.id ?? null;
+    console.log(
+      `[GATE] loading=${loading ? 'yes' : 'no'} session=${sessionId ?? 'none'} profile=${profileId ?? 'none'}`,
+    );
   }, [loading, session?.user?.id, (profile as any)?.id]);
 
   // Always wait for loading to finish before deciding the route,

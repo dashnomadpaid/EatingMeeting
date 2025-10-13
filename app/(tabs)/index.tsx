@@ -28,6 +28,7 @@ const KOREA_BOUNDS = {
   minLng: 124.0,
   maxLng: 132.0,
 };
+const DEBUG_PLACE_SYNC = true;
 const DEFAULT_DELTA = 0.02;
 const CALLOUT_IMAGE_SIZE = 120;
 const CLUSTER_DELTA_THRESHOLD = 0.015;
@@ -88,21 +89,21 @@ export default function MapScreen() {
   const [placesError, setPlacesError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
   const [showList, setShowList] = useState(false);
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchCounterRef = useRef(0);
   const mapRef = useRef<ComponentRef<typeof MapView> | null>(null);
   const storeSelectedGooglePlace = useMapStore((state) => state.selectedGooglePlace);
   const setSelectedGooglePlace = useMapStore((state) => state.setSelectedGooglePlace);
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
+  const selectedGooglePlaceRef = useRef<GooglePlace | null>(storeSelectedGooglePlace);
+
+  useEffect(() => {
+    selectedGooglePlaceRef.current = storeSelectedGooglePlace;
+  }, [storeSelectedGooglePlace]);
 
   const loadPlaces = useCallback((nextRegion: Region) => {
     abortRef.current?.abort();
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setFetching(true);
 
     const regionForSearch = currentLocation
       ? {
@@ -111,6 +112,18 @@ export default function MapScreen() {
           longitude: currentLocation.longitude,
         }
       : nextRegion;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setFetching(true);
+
+    const requestId = fetchCounterRef.current + 1;
+    fetchCounterRef.current = requestId;
+    console.log(
+      `[Places][${requestId}] ▶ start`,
+      `lat=${regionForSearch.latitude.toFixed(4)}`,
+      `lng=${regionForSearch.longitude.toFixed(4)}`,
+    );
 
     fetchNearbyPlaces(regionForSearch, controller.signal)
       .then((result) => {
@@ -126,21 +139,30 @@ export default function MapScreen() {
                   ) <= MAX_SEARCH_RADIUS_KM,
               )
             : limited;
+        console.log(
+          `[Places][${requestId}] ✓ success`,
+          `received=${withinRadius.length}`,
+          `raw=${limited.length}`,
+        );
         setPlaces(withinRadius);
         setPlacesError(null);
-        setSelectedPlaceId((prev) => {
-          if (prev) {
-            const existing = withinRadius.find((place) => place.id === prev);
-            if (existing) {
-              return prev;
+        const currentSelected = selectedGooglePlaceRef.current;
+        if (currentSelected) {
+          const stillExists = withinRadius.some((place) => place.id === currentSelected.id);
+          if (!stillExists && withinRadius.length > 0) {
+            if (DEBUG_PLACE_SYNC) {
+              console.log(
+                `[MAP] selection cleared (missing from results) id=${currentSelected.id} remaining=${withinRadius.length}`,
+              );
             }
+            setSelectedGooglePlace(null);
           }
-          return null;
-        });
+        }
       })
       .catch((cause) => {
         if (controller.signal.aborted) return;
         const message = (cause as Error)?.message ?? '잠시 후 다시 시도해주세요.';
+        console.log(`[Places][${requestId}] ✗ error`, message);
         if (Platform.OS === 'web') {
           console.warn('Places fetch failed (web likely CORS):', message);
         } else {
@@ -158,62 +180,62 @@ export default function MapScreen() {
             : FALLBACK_GOOGLE_PLACES;
         setPlaces(fallbackPlaces);
         setPlacesError(message);
-        setSelectedPlaceId(null);
+        const currentSelected = selectedGooglePlaceRef.current;
+        if (currentSelected) {
+          const stillExists = fallbackPlaces.some((place) => place.id === currentSelected.id);
+          if (!stillExists && fallbackPlaces.length > 0) {
+            if (DEBUG_PLACE_SYNC) {
+              console.log(
+                `[MAP] selection cleared (fallback list mismatch) id=${currentSelected.id} remaining=${fallbackPlaces.length}`,
+              );
+            }
+            setSelectedGooglePlace(null);
+          }
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) {
+          console.log(`[Places][${requestId}] ⏹ finish`);
           setFetching(false);
         }
       });
-  }, [currentLocation]);
+  }, [currentLocation, setSelectedGooglePlace]);
 
   useEffect(() => {
-    if (!selectedPlaceId) {
-      if (storeSelectedGooglePlace !== null) {
-        setSelectedGooglePlace(null);
-      }
+    if (!storeSelectedGooglePlace || places.length === 0) {
       return;
     }
-    const next = places.find((place) => place.id === selectedPlaceId) ?? null;
-    if (!next) {
-      if (storeSelectedGooglePlace !== null) {
-        setSelectedGooglePlace(null);
+    const exists = places.some((place) => place.id === storeSelectedGooglePlace.id);
+    if (!exists) {
+      if (DEBUG_PLACE_SYNC) {
+        console.log(
+          `[MAP] selection cleared (effect sync) id=${storeSelectedGooglePlace.id} list=${places.length}`,
+        );
       }
-      return;
+      setSelectedGooglePlace(null);
     }
-    if (storeSelectedGooglePlace?.id !== next.id) {
-      setSelectedGooglePlace(next);
-    }
-  }, [selectedPlaceId, places, storeSelectedGooglePlace, setSelectedGooglePlace]);
+  }, [places, storeSelectedGooglePlace, setSelectedGooglePlace]);
 
-  const handleRegionChangeComplete = useCallback(
-    (nextRegion: Region) => {
-      const constrained = constrainRegion(nextRegion);
-      setRegion((prev) => (regionsApproxEqual(prev, constrained) ? prev : constrained));
-      if (!regionsApproxEqual(nextRegion, constrained)) {
-        const latDiff = Math.abs(nextRegion.latitude - constrained.latitude);
-        const lngDiff = Math.abs(nextRegion.longitude - constrained.longitude);
-        const latDeltaDiff = Math.abs(nextRegion.latitudeDelta - constrained.latitudeDelta);
-        const lngDeltaDiff = Math.abs(nextRegion.longitudeDelta - constrained.longitudeDelta);
-        if (
-          latDiff > 0.0008 ||
-          lngDiff > 0.0008 ||
-          latDeltaDiff > 0.002 ||
-          lngDeltaDiff > 0.002
-        ) {
-          if (mapRef.current && 'animateToRegion' in mapRef.current) {
-            mapRef.current.animateToRegion(constrained, 160);
-          }
+  const handleRegionChangeComplete = useCallback((nextRegion: Region) => {
+    const constrained = constrainRegion(nextRegion);
+    setRegion((prev) => (regionsApproxEqual(prev, constrained) ? prev : constrained));
+    if (!regionsApproxEqual(nextRegion, constrained)) {
+      const latDiff = Math.abs(nextRegion.latitude - constrained.latitude);
+      const lngDiff = Math.abs(nextRegion.longitude - constrained.longitude);
+      const latDeltaDiff = Math.abs(nextRegion.latitudeDelta - constrained.latitudeDelta);
+      const lngDeltaDiff = Math.abs(nextRegion.longitudeDelta - constrained.longitudeDelta);
+      if (
+        latDiff > 0.0008 ||
+        lngDiff > 0.0008 ||
+        latDeltaDiff > 0.002 ||
+        lngDeltaDiff > 0.002
+      ) {
+        if (mapRef.current && 'animateToRegion' in mapRef.current) {
+          mapRef.current.animateToRegion(constrained, 160);
         }
-        return;
       }
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-      debounceRef.current = setTimeout(() => loadPlaces(constrained), 600);
-    },
-    [loadPlaces],
-  );
+    }
+  }, []);
 
   useEffect(() => {
     requestLocation();
@@ -235,20 +257,19 @@ export default function MapScreen() {
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
     };
   }, []);
 
-  const selectedPlace = useMemo(
-    () => (selectedPlaceId ? places.find((place) => place.id === selectedPlaceId) ?? null : null),
-    [places, selectedPlaceId],
-  );
+  const selectedPlace = useMemo(() => {
+    if (!storeSelectedGooglePlace) {
+      return null;
+    }
+    const inList = places.find((place) => place.id === storeSelectedGooglePlace.id);
+    return inList ?? storeSelectedGooglePlace;
+  }, [places, storeSelectedGooglePlace]);
 
   const handleCalloutPress = useCallback(
     (place: GooglePlace) => {
-      setSelectedPlaceId(place.id);
       setSelectedGooglePlace(place);
       setShowList(false);
       router.push({
@@ -256,7 +277,7 @@ export default function MapScreen() {
         params: { id: place.id },
       });
     },
-    [setSelectedGooglePlace, setSelectedPlaceId, setShowList],
+    [setSelectedGooglePlace, setShowList],
   );
 
   if (locationLoading && !currentLocation) {
@@ -302,9 +323,9 @@ export default function MapScreen() {
               key={place.id}
               coordinate={{ latitude: place.lat, longitude: place.lng }}
               onPress={() => {
-                setSelectedPlaceId(place.id);
+                setSelectedGooglePlace(place);
               }}
-              pinColor={selectedPlaceId === place.id ? '#FF6B35' : '#FF9E62'}
+              pinColor={storeSelectedGooglePlace?.id === place.id ? '#FF6B35' : '#FF9E62'}
             />
           ))}
       </MapView>
@@ -383,7 +404,7 @@ export default function MapScreen() {
               <TouchableOpacity
                 style={styles.listItem}
                 onPress={() => {
-                  setSelectedPlaceId(item.id);
+                  setSelectedGooglePlace(item);
                   if (mapRef.current && 'animateToRegion' in mapRef.current && region) {
                     const nextDelta = Math.min(
                       region.latitudeDelta,

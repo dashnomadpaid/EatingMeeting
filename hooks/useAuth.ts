@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useAuthStore } from '@/state/auth.store';
+import { buildFallbackProfile, useAuthStore } from '@/state/auth.store';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 
@@ -83,7 +83,10 @@ export function useAuth() {
     }
   }, [profileError]);
 
-  return { session, profile, loading, logout, profileChecked, profileError };
+  const hydratedProfile =
+    profile ?? (session?.user ? buildFallbackProfile(session.user.id, session) : null);
+
+  return { session, profile: hydratedProfile, loading, logout, profileChecked, profileError };
 }
 
 export function useRequireAuth() {

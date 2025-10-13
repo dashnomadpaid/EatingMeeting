@@ -1,5 +1,8 @@
 # Repository Context Snapshot
 
+> ⚠️ Before touching code, read `PLAYBOOK/AI_LOGGING_PLAYBOOK.md`.  
+> ✅ After completing your work, write a `/logs/YYYYMMDD_HHmm_agent_topic.md` entry detailing what you tried, any errors hit, and the final diffs.
+
 ## Root Layout
 - `app/` – Expo Router screens (auth, tab group, feature stacks)
 - `components/` – Shared UI widgets (buttons, avatars, proposal cards, etc.)

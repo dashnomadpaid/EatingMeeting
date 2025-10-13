@@ -4,6 +4,7 @@ import React, {
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 
 export type Region = {
@@ -34,7 +35,8 @@ declare global {
   }
 }
 
-const MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+const MAPS_API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
 
 const loadGoogleMapsAPI = (() => {
   let promise: Promise<void> | null = null;
@@ -49,7 +51,9 @@ const loadGoogleMapsAPI = (() => {
     }
 
     if (!MAPS_API_KEY) {
-      return Promise.reject(new Error('Missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY'));
+      return Promise.reject(
+        new Error('Missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (or fallback EXPO_PUBLIC_GOOGLE_PLACES_API_KEY)'),
+      );
     }
 
     if (!promise) {
@@ -96,11 +100,12 @@ Marker.displayName = 'NativeMapMarker';
 
 const MapView = forwardRef<any, NativeMapProps>(
   ({ region, markers, onRegionChangeComplete, style, children }, ref) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
-  const programmaticMoveRef = useRef(false);
-  const idleListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const mapRef = useRef<google.maps.Map | null>(null);
+    const markersRef = useRef<google.maps.Marker[]>([]);
+    const programmaticMoveRef = useRef(false);
+    const idleListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
   const childMarkers = useMemo<MarkerDescriptor[]>(() => {
     const items: MarkerDescriptor[] = [];
@@ -140,53 +145,61 @@ const MapView = forwardRef<any, NativeMapProps>(
     return list;
   }, [markers, childMarkers]);
 
-  useEffect(() => {
-    let isMounted = true;
+    useEffect(() => {
+      let isMounted = true;
 
-    loadGoogleMapsAPI()
-      .then(() => {
-        if (!isMounted || !containerRef.current || !window.google?.maps) return;
+      setLoadError(null);
 
-        const initialOptions: google.maps.MapOptions = {
-          center: { lat: region.latitude, lng: region.longitude },
-          zoom: regionToZoom(region.latitudeDelta),
-          disableDefaultUI: true,
-          gestureHandling: 'greedy',
-        };
+      loadGoogleMapsAPI()
+        .then(() => {
+          if (!isMounted || !containerRef.current || !window.google?.maps) return;
 
-        const map = new window.google.maps.Map(containerRef.current, initialOptions);
-        mapRef.current = map;
-
-        idleListenerRef.current = map.addListener('idle', () => {
-          if (!mapRef.current) return;
-          const currentMap = mapRef.current;
-          const bounds = currentMap.getBounds();
-          const center = currentMap.getCenter();
-          if (!bounds || !center) return;
-
-          const northEast = bounds.getNorthEast();
-          const southWest = bounds.getSouthWest();
-          const latDelta = Math.abs(northEast.lat() - southWest.lat());
-          const lngDelta = Math.abs(northEast.lng() - southWest.lng());
-
-          const nextRegion: Region = {
-            latitude: center.lat(),
-            longitude: center.lng(),
-            latitudeDelta: latDelta || region.latitudeDelta,
-            longitudeDelta: lngDelta || region.longitudeDelta,
+          const initialOptions: google.maps.MapOptions = {
+            center: { lat: region.latitude, lng: region.longitude },
+            zoom: regionToZoom(region.latitudeDelta),
+            disableDefaultUI: true,
+            gestureHandling: 'greedy',
           };
 
-          if (programmaticMoveRef.current) {
-            programmaticMoveRef.current = false;
-            return;
-          }
+          const map = new window.google.maps.Map(containerRef.current, initialOptions);
+          mapRef.current = map;
 
-          onRegionChangeComplete?.(nextRegion);
+          idleListenerRef.current = map.addListener('idle', () => {
+            if (!mapRef.current) return;
+            const currentMap = mapRef.current;
+            const bounds = currentMap.getBounds();
+            const center = currentMap.getCenter();
+            if (!bounds || !center) return;
+
+            const northEast = bounds.getNorthEast();
+            const southWest = bounds.getSouthWest();
+            const latDelta = Math.abs(northEast.lat() - southWest.lat());
+            const lngDelta = Math.abs(northEast.lng() - southWest.lng());
+
+            const nextRegion: Region = {
+              latitude: center.lat(),
+              longitude: center.lng(),
+              latitudeDelta: latDelta || region.latitudeDelta,
+              longitudeDelta: lngDelta || region.longitudeDelta,
+            };
+
+            if (programmaticMoveRef.current) {
+              programmaticMoveRef.current = false;
+              return;
+            }
+
+            onRegionChangeComplete?.(nextRegion);
+          });
+        })
+        .catch((error) => {
+          console.warn('[NativeMap.web] Google Maps API failed to load', error);
+          if (!isMounted) return;
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : 'Google Maps JavaScript API를 불러오는 데 실패했습니다.',
+          );
         });
-      })
-      .catch((error) => {
-        console.warn('[NativeMap.web] Google Maps API failed to load', error);
-      });
 
     return () => {
       isMounted = false;
@@ -261,6 +274,32 @@ const MapView = forwardRef<any, NativeMapProps>(
     }),
     [],
   );
+
+  if (loadError) {
+    return (
+      <div
+        style={{
+          ...mergedStyle,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 20,
+          textAlign: 'center',
+          backgroundColor: '#F7F7F7',
+          color: '#444444',
+          fontSize: 14,
+          lineHeight: 1.6,
+        }}
+      >
+        {loadError}
+        <br />
+        <span style={{ fontSize: 12, color: '#777777' }}>
+          웹 개발 서버 도메인(`http://localhost` 등)이 Google Cloud 콘솔의 허용 referrer에 포함되어 있고
+          Maps JavaScript API가 활성화되어 있는지 확인하세요.
+        </span>
+      </div>
+    );
+  }
 
   return <div ref={containerRef} style={mergedStyle} />;
 });
