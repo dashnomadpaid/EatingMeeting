@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  Dimensions,
 } from 'react-native';
 import MapView, { Marker, type Region } from '@/components/NativeMap';
 import { useCurrentLocation } from '@/hooks/useMap';
@@ -50,6 +51,16 @@ const FALLBACK_GOOGLE_PLACES: GooglePlace[] = MOCK_PLACES.map((place) => ({
 const MAX_SEARCH_RADIUS_KM = 10;
 const MAX_LAT_DELTA = Math.max(0.5, KOREA_BOUNDS.maxLat - KOREA_BOUNDS.minLat - 0.2);
 const MAX_LNG_DELTA = Math.max(0.5, KOREA_BOUNDS.maxLng - KOREA_BOUNDS.minLng - 0.2);
+const WINDOW_WIDTH = Dimensions.get('window').width;
+const CARD_WIDTH = Math.min(WINDOW_WIDTH * 0.8, 320);
+const CARD_SPACING = 16;
+const CARD_FULL_WIDTH = CARD_WIDTH + CARD_SPACING;
+const CARD_PEEK_PADDING = Math.max((WINDOW_WIDTH - CARD_WIDTH) / 2, 16);
+
+function shortPlaceId(id?: string | null) {
+  if (!id) return 'none';
+  return id.length > 6 ? `${id.slice(0, 6)}…` : id;
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -89,9 +100,12 @@ export default function MapScreen() {
   const [placesError, setPlacesError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
   const [showList, setShowList] = useState(false);
+  const [isCarouselVisible, setCarouselVisible] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
   const abortRef = useRef<AbortController | null>(null);
   const fetchCounterRef = useRef(0);
   const mapRef = useRef<ComponentRef<typeof MapView> | null>(null);
+  const carouselRef = useRef<FlatList<GooglePlace> | null>(null);
   const storeSelectedGooglePlace = useMapStore((state) => state.selectedGooglePlace);
   const setSelectedGooglePlace = useMapStore((state) => state.setSelectedGooglePlace);
   const insets = useSafeAreaInsets();
@@ -101,6 +115,41 @@ export default function MapScreen() {
   useEffect(() => {
     selectedGooglePlaceRef.current = storeSelectedGooglePlace;
   }, [storeSelectedGooglePlace]);
+
+  useEffect(() => {
+    if (!storeSelectedGooglePlace) {
+      setActiveIndex(-1);
+      setCarouselVisible(false);
+      return;
+    }
+    const index = places.findIndex((place) => place.id === storeSelectedGooglePlace.id);
+    if (index !== -1) {
+      setActiveIndex(index);
+    }
+  }, [places, storeSelectedGooglePlace]);
+
+  useEffect(() => {
+    if (showList) {
+      setCarouselVisible(false);
+    }
+  }, [showList]);
+
+  useEffect(() => {
+    if (!isCarouselVisible || activeIndex < 0) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      try {
+        carouselRef.current?.scrollToIndex({ index: activeIndex, animated: true });
+      } catch {
+        setTimeout(() => {
+          try {
+            carouselRef.current?.scrollToIndex({ index: activeIndex, animated: true });
+          } catch {}
+        }, 100);
+      }
+    });
+  }, [isCarouselVisible, activeIndex]);
 
   const loadPlaces = useCallback((nextRegion: Region) => {
     abortRef.current?.abort();
@@ -152,7 +201,7 @@ export default function MapScreen() {
           if (!stillExists && withinRadius.length > 0) {
             if (DEBUG_PLACE_SYNC) {
               console.log(
-                `[MAP] selection cleared (missing from results) id=${currentSelected.id} remaining=${withinRadius.length}`,
+                `[MAP] ✂ pruned from results id=${shortPlaceId(currentSelected.id)} remaining=${withinRadius.length}`,
               );
             }
             setSelectedGooglePlace(null);
@@ -186,7 +235,7 @@ export default function MapScreen() {
           if (!stillExists && fallbackPlaces.length > 0) {
             if (DEBUG_PLACE_SYNC) {
               console.log(
-                `[MAP] selection cleared (fallback list mismatch) id=${currentSelected.id} remaining=${fallbackPlaces.length}`,
+                `[MAP] ✂ pruned (fallback) id=${shortPlaceId(currentSelected.id)} remaining=${fallbackPlaces.length}`,
               );
             }
             setSelectedGooglePlace(null);
@@ -209,7 +258,7 @@ export default function MapScreen() {
     if (!exists) {
       if (DEBUG_PLACE_SYNC) {
         console.log(
-          `[MAP] selection cleared (effect sync) id=${storeSelectedGooglePlace.id} list=${places.length}`,
+          `[MAP] ✂ effect sync id=${shortPlaceId(storeSelectedGooglePlace.id)} list=${places.length}`,
         );
       }
       setSelectedGooglePlace(null);
@@ -280,6 +329,163 @@ export default function MapScreen() {
     [setSelectedGooglePlace, setShowList],
   );
 
+  const handleMarkerPress = useCallback(
+    (place: GooglePlace) => {
+      setShowList(false);
+      setCarouselVisible(true);
+      setSelectedGooglePlace(place);
+
+      const currentDelta = region
+        ? Math.min(region.latitudeDelta, CLUSTER_DELTA_THRESHOLD * 0.9)
+        : DEFAULT_DELTA;
+      const nextRegion = constrainRegion({
+        latitude: place.lat,
+        longitude: place.lng,
+        latitudeDelta: currentDelta,
+        longitudeDelta: currentDelta,
+      });
+      setRegion(nextRegion);
+      if (mapRef.current && 'animateToRegion' in mapRef.current) {
+        mapRef.current.animateToRegion(nextRegion, 250);
+      }
+
+      const index = places.findIndex((item) => item.id === place.id);
+      if (index !== -1) {
+        setActiveIndex(index);
+        requestAnimationFrame(() => {
+          try {
+            carouselRef.current?.scrollToIndex({ index, animated: true });
+          } catch (error) {
+            setTimeout(() => {
+              try {
+                carouselRef.current?.scrollToIndex({ index, animated: true });
+              } catch {}
+            }, 100);
+          }
+        });
+      }
+    },
+    [places, region, setSelectedGooglePlace, setShowList],
+  );
+
+  const handleMapPress = useCallback(
+    (event: { nativeEvent: { action?: string } }) => {
+      if (event.nativeEvent?.action === 'marker-press') return;
+      setCarouselVisible(false);
+      setSelectedGooglePlace(null);
+    },
+    [setSelectedGooglePlace],
+  );
+
+  const getItemLayout = useCallback(
+    (_: unknown, index: number) => ({ length: CARD_FULL_WIDTH, offset: CARD_FULL_WIDTH * index, index }),
+    [],
+  );
+
+  const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 80 }), []);
+
+  const handleViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: Array<{ index?: number | null }> }) => {
+      if (!isCarouselVisible || viewableItems.length === 0) {
+        return;
+      }
+      const first = viewableItems.find((item) => item.index !== null && item.index !== undefined);
+      if (first?.index === undefined || first.index === null) {
+        return;
+      }
+      if (first.index === activeIndex) {
+        return;
+      }
+      const nextPlace = places[first.index];
+      if (!nextPlace) {
+        return;
+      }
+      setActiveIndex(first.index);
+      if (nextPlace.id !== storeSelectedGooglePlace?.id) {
+        setSelectedGooglePlace(nextPlace);
+        const delta = region
+          ? Math.min(region.latitudeDelta, CLUSTER_DELTA_THRESHOLD * 0.9)
+          : DEFAULT_DELTA;
+        const nextRegion = constrainRegion({
+          latitude: nextPlace.lat,
+          longitude: nextPlace.lng,
+          latitudeDelta: delta,
+          longitudeDelta: delta,
+        });
+        setRegion(nextRegion);
+        if (mapRef.current && 'animateToRegion' in mapRef.current) {
+          mapRef.current.animateToRegion(nextRegion, 250);
+        }
+      }
+    },
+    [activeIndex, isCarouselVisible, places, region, setSelectedGooglePlace, storeSelectedGooglePlace],
+  );
+
+  const viewabilityConfigPairs = useMemo(
+    () => [{ viewabilityConfig, onViewableItemsChanged: handleViewableItemsChanged }],
+    [handleViewableItemsChanged, viewabilityConfig],
+  );
+
+  const handleScrollToIndexFailed = useCallback(
+    ({ index }: { index: number }) => {
+      setTimeout(() => {
+        if (index < places.length) {
+          try {
+            carouselRef.current?.scrollToIndex({ index, animated: true });
+          } catch {}
+        }
+      }, 200);
+    },
+    [places.length],
+  );
+
+  const renderCarouselItem = useCallback(
+    ({ item }: { item: GooglePlace }) => {
+      const isActive = storeSelectedGooglePlace?.id === item.id;
+      return (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[styles.carouselCardWrapper, isActive ? styles.carouselCardWrapperActive : null]}
+          onPress={() => handleCalloutPress(item)}
+        >
+          <View style={[styles.selectedCard, isActive ? styles.selectedCardActive : null]}>
+            {item.photoUri ? (
+              <Image source={{ uri: item.photoUri }} style={styles.selectedImage} resizeMode="cover" />
+            ) : (
+              <View style={[styles.selectedImage, styles.calloutImagePlaceholder]}>
+                <Text style={styles.calloutPlaceholderText}>사진 없음</Text>
+              </View>
+            )}
+            <View style={styles.selectedBody}>
+              <Text style={styles.calloutTitle} numberOfLines={1}>
+                {item.name}
+              </Text>
+              {item.address ? (
+                <Text style={styles.calloutSubtitle} numberOfLines={1}>
+                  {item.address}
+                </Text>
+              ) : null}
+              <View style={styles.calloutMetaRow}>
+                {typeof item.rating === 'number' ? (
+                  <Text style={styles.calloutRating}>
+                    ⭐ {item.rating.toFixed(1)}
+                    {item.userRatingsTotal ? ` (${item.userRatingsTotal})` : ''}
+                  </Text>
+                ) : null}
+                {item.primaryTypeDisplayName ? (
+                  <Tag label={item.primaryTypeDisplayName} type="category" />
+                ) : item.types?.length ? (
+                  <Tag label={item.types[0]} type="category" />
+                ) : null}
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [handleCalloutPress, storeSelectedGooglePlace],
+  );
+
   if (locationLoading && !currentLocation) {
     return (
       <View style={styles.centered}>
@@ -315,19 +521,25 @@ export default function MapScreen() {
         initialRegion={region}
         region={region}
         onRegionChangeComplete={handleRegionChangeComplete}
+        onPress={handleMapPress}
         showsUserLocation
       >
         {!isWeb &&
-          places.map((place) => (
-            <Marker
-              key={place.id}
-              coordinate={{ latitude: place.lat, longitude: place.lng }}
-              onPress={() => {
-                setSelectedGooglePlace(place);
-              }}
-              pinColor={storeSelectedGooglePlace?.id === place.id ? '#FF6B35' : '#FF9E62'}
-            />
-          ))}
+          places.map((place) => {
+            const isActive = storeSelectedGooglePlace?.id === place.id;
+            return (
+              <Marker
+                key={place.id}
+                coordinate={{ latitude: place.lat, longitude: place.lng }}
+                onPress={() => handleMarkerPress(place)}
+                tracksViewChanges={false}
+              >
+                <View style={[styles.markerBubble, isActive ? styles.markerBubbleActive : null]}>
+                  <View style={styles.markerDot} />
+                </View>
+              </Marker>
+            );
+          })}
       </MapView>
       {!showList ? (
         <View style={[styles.topControls, { top: insets.top + 12 }]}>
@@ -404,22 +616,20 @@ export default function MapScreen() {
               <TouchableOpacity
                 style={styles.listItem}
                 onPress={() => {
-                  setSelectedGooglePlace(item);
-                  if (mapRef.current && 'animateToRegion' in mapRef.current && region) {
-                    const nextDelta = Math.min(
-                      region.latitudeDelta,
-                      CLUSTER_DELTA_THRESHOLD * 0.9,
-                    );
-                    mapRef.current.animateToRegion(
-                      {
-                        latitude: item.lat,
-                        longitude: item.lng,
-                        latitudeDelta: nextDelta,
-                        longitudeDelta: nextDelta,
-                      },
-                      350,
-                    );
+                  const currentDelta = region
+                    ? Math.min(region.latitudeDelta, CLUSTER_DELTA_THRESHOLD * 0.9)
+                    : DEFAULT_DELTA;
+                  const nextRegion = constrainRegion({
+                    latitude: item.lat,
+                    longitude: item.lng,
+                    latitudeDelta: currentDelta,
+                    longitudeDelta: currentDelta,
+                  });
+                  setRegion(nextRegion);
+                  if (mapRef.current && 'animateToRegion' in mapRef.current) {
+                    mapRef.current.animateToRegion(nextRegion, 350);
                   }
+                  setSelectedGooglePlace(item);
                   setShowList(false);
                 }}
               >
@@ -519,6 +729,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  markerBubble: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#FF9E62',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  markerBubbleActive: {
+    borderColor: '#FF6B35',
+    shadowOpacity: 0.28,
+  },
+  markerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF6B35',
+  },
   calloutImagePlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -563,6 +798,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+  selectedCardActive: {
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+  },
   selectedImage: {
     width: '100%',
     height: CALLOUT_IMAGE_SIZE,
@@ -571,6 +810,22 @@ const styles = StyleSheet.create({
   selectedBody: {
     paddingHorizontal: 16,
     paddingVertical: 14,
+  },
+  carouselContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+  },
+  carouselContent: {
+    paddingHorizontal: CARD_PEEK_PADDING,
+    paddingBottom: 12,
+  },
+  carouselCardWrapper: {
+    width: CARD_WIDTH,
+    marginRight: CARD_SPACING,
+  },
+  carouselCardWrapperActive: {
+    transform: [{ translateY: -4 }],
   },
   listContainer: {
     position: 'absolute',

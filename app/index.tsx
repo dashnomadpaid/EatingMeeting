@@ -8,9 +8,10 @@ export default function Gate() {
   useEffect(() => {
     const sessionId = session?.user?.id ?? null;
     const profileId = (profile as any)?.id ?? null;
-    console.log(
-      `[GATE] loading=${loading ? 'yes' : 'no'} session=${sessionId ?? 'none'} profile=${profileId ?? 'none'}`,
-    );
+    const shortSession = sessionId ? `${sessionId.slice(0, 6)}…` : 'none';
+    const shortProfile = profileId ? `${profileId.slice(0, 6)}…` : 'none';
+    const icon = loading ? '⏳' : sessionId ? '✅' : '🚪';
+    console.log(`GATE ${icon} load=${loading ? 'on' : 'off'} session=${shortSession} profile=${shortProfile}`);
   }, [loading, session?.user?.id, (profile as any)?.id]);
 
   // Always wait for loading to finish before deciding the route,
@@ -24,7 +25,8 @@ export default function Gate() {
   }
 
   if (!session) {
-    return <Redirect href="/auth/login-password" />;
+    // Default to OTP login; password users can navigate to password screen.
+    return <Redirect href="/auth/login" />;
   }
   // If session exists but profile is not yet determined (not checked), optimistically go to tabs
   if (session && !profile) {

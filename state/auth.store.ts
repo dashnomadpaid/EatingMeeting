@@ -144,13 +144,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // Safety: ensure loading never hangs indefinitely.
       safety = setTimeout(() => {
-        console.log('[AUTH] init timeout -> loading=false');
+        console.log('AUTH ⚠ timeout -> loading=false');
         try { set({ loading: false }); } catch {}
       }, 5000);
       const {
         data: { session },
       } = await supabase.auth.getSession();
-  console.log(`[AUTH] init session=${session?.user?.id ?? 'none'}`);
+  const shortSession = session?.user?.id ? `${session.user.id.slice(0, 6)}…` : 'none';
+  console.log(`AUTH 🔐 session=${shortSession}`);
       set({ session });
 
       if (session?.user) {
@@ -159,7 +160,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ profile: null, profileChecked: false, profileError: false });
       }
     } finally {
-  console.log('[AUTH] init loading=false');
+  console.log('AUTH ✅ loading=false');
       set({ loading: false });
       try { if (safety) clearTimeout(safety); } catch {}
     }

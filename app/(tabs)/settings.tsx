@@ -31,7 +31,8 @@ export default function SettingsScreen() {
       return;
     }
 
-    router.replace('/auth/login-password');
+    // Route to OTP login by default. Password accounts can switch from there.
+    router.replace('/auth/login');
   };
 
   const handleLogout = () => {

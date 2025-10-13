@@ -4,8 +4,9 @@ import { PlaceFilters } from '@/types/models';
 import { Coordinates } from '@/lib/geo';
 import type { Place as GooglePlace } from '@/services/places.google';
 
-function formatPlaceId(id?: string | null) {
-  return id ?? 'none';
+function shortId(id?: string | null) {
+  if (!id) return 'none';
+  return id.length > 6 ? `${id.slice(0, 6)}…` : id;
 }
 
 interface MapState {
@@ -46,20 +47,17 @@ export const useMapStore = create<MapState>((set) => ({
   setSelectedGooglePlace: (place) =>
     set((state) => {
       const prev = state.selectedGooglePlace;
-      console.log(
-        `[MAP] selection call prev=${formatPlaceId(prev?.id)} next=${formatPlaceId(place?.id)}`,
-      );
+      const prevLabel = shortId(prev?.id);
+      const nextLabel = shortId(place?.id);
       if (prev?.id === place?.id) {
-        console.log(`[MAP] selection unchanged id=${formatPlaceId(prev?.id)}`);
+        console.log(`[MAP] ↻ selection unchanged (${prevLabel})`);
         return state;
       }
       if (!prev && !place) {
-        console.log('[MAP] selection already empty');
+        console.log('[MAP] ↻ selection already empty');
         return state;
       }
-      console.log(
-        `[MAP] selection update ${formatPlaceId(prev?.id)} -> ${formatPlaceId(place?.id)}`,
-      );
+      console.log(`[MAP] → selection ${prevLabel} → ${nextLabel}`);
       return { selectedGooglePlace: place };
     }),
 }));
