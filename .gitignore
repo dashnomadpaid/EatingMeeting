@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+.expo-shared/
+.mexpo/
+.metro-cache/
+dist/
+build/
+web-build/
+ios/
+android/
+.DS_Store
+.vscode/*
+.env
+.env.*
