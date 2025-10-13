@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,7 @@ import {
   FlatList,
   Image,
 } from 'react-native';
-import MapView, { Callout, Marker, PROVIDER_GOOGLE } from '@/components/NativeMap';
-import type { Region } from 'react-native-maps';
+import MapView, { Marker, type Region } from '@/components/NativeMap';
 import { useCurrentLocation } from '@/hooks/useMap';
 import { Button } from '@/components/Button';
 import { fetchNearbyPlaces, type Place as GooglePlace } from '@/services/places.google';
@@ -93,7 +92,6 @@ export default function MapScreen() {
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapRef = useRef<ComponentRef<typeof MapView> | null>(null);
-  const markerRefs = useRef<Record<string, ComponentRef<typeof Marker> | null>>({});
   const storeSelectedGooglePlace = useMapStore((state) => state.selectedGooglePlace);
   const setSelectedGooglePlace = useMapStore((state) => state.setSelectedGooglePlace);
   const insets = useSafeAreaInsets();
@@ -243,28 +241,10 @@ export default function MapScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!selectedPlaceId || Platform.OS === 'web') return;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const attempt = (retriesRemaining: number) => {
-      const ref = markerRefs.current[selectedPlaceId];
-      if (ref && typeof (ref as any).showCallout === 'function') {
-        try {
-          (ref as any).showCallout();
-        } catch (err) {
-          console.warn('Failed to show callout', err);
-        }
-        return;
-      }
-      if (retriesRemaining > 0) {
-        timeout = setTimeout(() => attempt(retriesRemaining - 1), 80);
-      }
-    };
-    attempt(5);
-    return () => {
-      if (timeout) clearTimeout(timeout);
-    };
-  }, [selectedPlaceId]);
+  const selectedPlace = useMemo(
+    () => (selectedPlaceId ? places.find((place) => place.id === selectedPlaceId) ?? null : null),
+    [places, selectedPlaceId],
+  );
 
   const handleCalloutPress = useCallback(
     (place: GooglePlace) => {
@@ -277,45 +257,6 @@ export default function MapScreen() {
       });
     },
     [setSelectedGooglePlace, setSelectedPlaceId, setShowList],
-  );
-
-  const renderCalloutContent = useCallback(
-    (place: GooglePlace) => (
-      <View style={styles.calloutContainer}>
-        <View style={styles.callout}>
-          {place.photoUri ? (
-            <Image
-              source={{ uri: place.photoUri }}
-              style={styles.calloutImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.calloutImage, styles.calloutImagePlaceholder]}>
-              <Text style={styles.calloutPlaceholderText}>사진 없음</Text>
-            </View>
-          )}
-          <View style={styles.calloutBody}>
-            <Text style={styles.calloutTitle}>{place.name}</Text>
-            {place.address ? <Text style={styles.calloutSubtitle}>{place.address}</Text> : null}
-            <View style={styles.calloutMetaRow}>
-              {typeof place.rating === 'number' ? (
-                <Text style={styles.calloutRating}>
-                  ⭐ {place.rating.toFixed(1)}
-                  {place.userRatingsTotal ? ` (${place.userRatingsTotal})` : ''}
-                </Text>
-              ) : null}
-              {place.primaryTypeDisplayName ? (
-                <Tag label={place.primaryTypeDisplayName} type="category" />
-              ) : place.types?.length ? (
-                <Tag label={place.types[0]} type="category" />
-              ) : null}
-            </View>
-          </View>
-        </View>
-        <View style={styles.calloutArrow} />
-      </View>
-    ),
-    [],
   );
 
   if (locationLoading && !currentLocation) {
@@ -351,9 +292,9 @@ export default function MapScreen() {
         ref={mapRef}
         style={styles.map}
         initialRegion={region}
+        region={region}
         onRegionChangeComplete={handleRegionChangeComplete}
         showsUserLocation
-        provider={PROVIDER_GOOGLE}
       >
         {!isWeb &&
           places.map((place) => (
@@ -363,18 +304,8 @@ export default function MapScreen() {
               onPress={() => {
                 setSelectedPlaceId(place.id);
               }}
-              ref={(node) => {
-                if (node) {
-                  markerRefs.current[place.id] = node;
-                } else {
-                  delete markerRefs.current[place.id];
-                }
-              }}
-            >
-              <Callout tooltip onPress={() => handleCalloutPress(place)}>
-                {renderCalloutContent(place)}
-              </Callout>
-            </Marker>
+              pinColor={selectedPlaceId === place.id ? '#FF6B35' : '#FF9E62'}
+            />
           ))}
       </MapView>
       {!showList ? (
@@ -397,6 +328,46 @@ export default function MapScreen() {
           <Text style={styles.loaderText}>주변 장소 업데이트 중...</Text>
         </View>
       ) : null}
+      {!showList && selectedPlace ? (
+        <TouchableOpacity
+          style={[styles.selectedOverlay, { bottom: insets.bottom + 24 }]}
+          activeOpacity={0.85}
+          onPress={() => handleCalloutPress(selectedPlace)}
+        >
+          <View style={styles.selectedCard}>
+            {selectedPlace.photoUri ? (
+              <Image
+                source={{ uri: selectedPlace.photoUri }}
+                style={styles.selectedImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.selectedImage, styles.calloutImagePlaceholder]}>
+                <Text style={styles.calloutPlaceholderText}>사진 없음</Text>
+              </View>
+            )}
+            <View style={styles.selectedBody}>
+              <Text style={styles.calloutTitle}>{selectedPlace.name}</Text>
+              {selectedPlace.address ? (
+                <Text style={styles.calloutSubtitle}>{selectedPlace.address}</Text>
+              ) : null}
+              <View style={styles.calloutMetaRow}>
+                {typeof selectedPlace.rating === 'number' ? (
+                  <Text style={styles.calloutRating}>
+                    ⭐ {selectedPlace.rating.toFixed(1)}
+                    {selectedPlace.userRatingsTotal ? ` (${selectedPlace.userRatingsTotal})` : ''}
+                  </Text>
+                ) : null}
+                {selectedPlace.primaryTypeDisplayName ? (
+                  <Tag label={selectedPlace.primaryTypeDisplayName} type="category" />
+                ) : selectedPlace.types?.length ? (
+                  <Tag label={selectedPlace.types[0]} type="category" />
+                ) : null}
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      ) : null}
       {showList ? (
         <View style={[styles.listContainer, { paddingTop: insets.top + 12 }]}>
           <View style={styles.listHeader}>
@@ -413,7 +384,6 @@ export default function MapScreen() {
                 style={styles.listItem}
                 onPress={() => {
                   setSelectedPlaceId(item.id);
-                  setShowList(false);
                   if (mapRef.current && 'animateToRegion' in mapRef.current && region) {
                     const nextDelta = Math.min(
                       region.latitudeDelta,
@@ -528,20 +498,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  calloutContainer: {
-    alignItems: 'center',
-  },
-  callout: {
-    width: 240,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-  },
-  calloutImage: {
-    width: '100%',
-    height: CALLOUT_IMAGE_SIZE,
-    backgroundColor: '#EFEFEF',
-  },
   calloutImagePlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -549,10 +505,6 @@ const styles = StyleSheet.create({
   calloutPlaceholderText: {
     color: '#777777',
     fontSize: 12,
-  },
-  calloutBody: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
   calloutMetaRow: {
     flexDirection: 'row',
@@ -575,16 +527,29 @@ const styles = StyleSheet.create({
     color: '#FF6B35',
     marginRight: 12,
   },
-  calloutArrow: {
-    width: 0,
-    height: 0,
-    borderTopWidth: 12,
-    borderTopColor: '#FFFFFF',
-    borderLeftWidth: 10,
-    borderLeftColor: 'transparent',
-    borderRightWidth: 10,
-    borderRightColor: 'transparent',
-    marginTop: -1,
+  selectedOverlay: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+  },
+  selectedCard: {
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  selectedImage: {
+    width: '100%',
+    height: CALLOUT_IMAGE_SIZE,
+    backgroundColor: '#EFEFEF',
+  },
+  selectedBody: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   listContainer: {
     position: 'absolute',

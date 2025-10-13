@@ -1,40 +1,271 @@
-// components/NativeMap.web.tsx
-// Web 전용: 네이티브 전용 API를 import하지 않도록 완전한 플레이스홀더 구현
-import * as React from 'react';
-import { View, Text } from 'react-native';
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from 'react';
 
-// 호출부가 기대할 수 있는 상수/컴포넌트/타입을 모두 제공
-export const PROVIDER_DEFAULT = 'web';
-export const PROVIDER_GOOGLE = 'web';
-export const Marker: React.FC<any> = () => null;
-export const Callout: React.FC<any> = ({ children }) => <View>{children}</View>;
+export type Region = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
 
-// 실제 MapView에서 흔히 쓰는 prop들을 넉넉하게 받아도 무시(no-op)
-export type MapViewProps = React.PropsWithChildren<{
+type MarkerDescriptor = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  title?: string;
+};
+
+type NativeMapProps = {
+  region: Region;
+  markers?: MarkerDescriptor[];
+  onRegionChangeComplete?: (region: Region) => void;
   style?: any;
-  initialRegion?: any;
-  region?: any;
-  onRegionChange?: (...args: any[]) => void;
-  onRegionChangeComplete?: (...args: any[]) => void;
-  showsUserLocation?: boolean;
-  provider?: any;
-}>;
+  children?: React.ReactNode;
+};
 
-export default function WebMapPlaceholder({
-  style,
-  children,
-}: MapViewProps) {
-  return (
-    <View
-      style={[
-        { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F6F6F6', padding: 12 },
-        style,
-      ]}
-    >
-      <Text style={{ color: '#444', marginBottom: 6, textAlign: 'center' }}>
-        웹에서는 지도를 사용할 수 없습니다. Expo Go(iOS/Android)에서 열어 확인해주세요.
-      </Text>
-      {children ? <View>{children}</View> : null}
-    </View>
-  );
+declare global {
+  interface Window {
+    google?: typeof google;
+  }
 }
+
+const MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+const loadGoogleMapsAPI = (() => {
+  let promise: Promise<void> | null = null;
+
+  return () => {
+    if (typeof window === 'undefined') {
+      return Promise.reject(new Error('Google Maps API cannot load on the server.'));
+    }
+
+    if (window.google?.maps) {
+      return Promise.resolve();
+    }
+
+    if (!MAPS_API_KEY) {
+      return Promise.reject(new Error('Missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY'));
+    }
+
+    if (!promise) {
+      promise = new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () =>
+          reject(new Error('Failed to load Google Maps JavaScript API script.'));
+        document.head.appendChild(script);
+      });
+    }
+
+    return promise;
+  };
+})();
+
+function flattenStyle(style: any): React.CSSProperties {
+  if (!style) return {};
+  if (Array.isArray(style)) {
+    return style.reduce<React.CSSProperties>(
+      (acc, item) => Object.assign(acc, flattenStyle(item)),
+      {},
+    );
+  }
+  if (typeof style === 'object') {
+    return style as React.CSSProperties;
+  }
+  return {};
+}
+
+function regionToZoom(latitudeDelta: number): number {
+  if (!latitudeDelta || latitudeDelta <= 0) {
+    return 14;
+  }
+  const zoom = Math.log2(360 / latitudeDelta);
+  return Math.max(3, Math.min(21, Math.round(zoom + 1)));
+}
+
+const Marker: React.FC<any> = () => null;
+Marker.displayName = 'NativeMapMarker';
+
+const MapView = forwardRef<any, NativeMapProps>(
+  ({ region, markers, onRegionChangeComplete, style, children }, ref) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const markersRef = useRef<google.maps.Marker[]>([]);
+  const programmaticMoveRef = useRef(false);
+  const idleListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+
+  const childMarkers = useMemo<MarkerDescriptor[]>(() => {
+    const items: MarkerDescriptor[] = [];
+    React.Children.forEach(children, (child, index) => {
+      if (!React.isValidElement(child)) return;
+      const props = child.props as {
+        coordinate?: { latitude: number; longitude: number };
+        title?: string;
+        identifier?: string;
+      };
+      if (!props?.coordinate) return;
+      items.push({
+        id:
+          child.key?.toString() ??
+          props.identifier ??
+          props.title ??
+          `marker-child-${index}`,
+        latitude: props.coordinate.latitude,
+        longitude: props.coordinate.longitude,
+        title: props.title,
+      });
+    });
+    return items;
+  }, [children]);
+
+  const combinedMarkers = useMemo<MarkerDescriptor[]>(() => {
+    const list: MarkerDescriptor[] = [];
+    markers?.forEach((marker) =>
+      list.push({
+        id: marker.id,
+        latitude: marker.latitude,
+        longitude: marker.longitude,
+        title: marker.title,
+      }),
+    );
+    childMarkers.forEach((marker) => list.push(marker));
+    return list;
+  }, [markers, childMarkers]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadGoogleMapsAPI()
+      .then(() => {
+        if (!isMounted || !containerRef.current || !window.google?.maps) return;
+
+        const initialOptions: google.maps.MapOptions = {
+          center: { lat: region.latitude, lng: region.longitude },
+          zoom: regionToZoom(region.latitudeDelta),
+          disableDefaultUI: true,
+          gestureHandling: 'greedy',
+        };
+
+        const map = new window.google.maps.Map(containerRef.current, initialOptions);
+        mapRef.current = map;
+
+        idleListenerRef.current = map.addListener('idle', () => {
+          if (!mapRef.current) return;
+          const currentMap = mapRef.current;
+          const bounds = currentMap.getBounds();
+          const center = currentMap.getCenter();
+          if (!bounds || !center) return;
+
+          const northEast = bounds.getNorthEast();
+          const southWest = bounds.getSouthWest();
+          const latDelta = Math.abs(northEast.lat() - southWest.lat());
+          const lngDelta = Math.abs(northEast.lng() - southWest.lng());
+
+          const nextRegion: Region = {
+            latitude: center.lat(),
+            longitude: center.lng(),
+            latitudeDelta: latDelta || region.latitudeDelta,
+            longitudeDelta: lngDelta || region.longitudeDelta,
+          };
+
+          if (programmaticMoveRef.current) {
+            programmaticMoveRef.current = false;
+            return;
+          }
+
+          onRegionChangeComplete?.(nextRegion);
+        });
+      })
+      .catch((error) => {
+        console.warn('[NativeMap.web] Google Maps API failed to load', error);
+      });
+
+    return () => {
+      isMounted = false;
+      if (idleListenerRef.current) {
+        idleListenerRef.current.remove();
+        idleListenerRef.current = null;
+      }
+      markersRef.current.forEach((marker) => marker.setMap(null));
+      markersRef.current = [];
+      mapRef.current = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const center = map.getCenter();
+    const currentLat = center?.lat() ?? region.latitude;
+    const currentLng = center?.lng() ?? region.longitude;
+    const latDiff = Math.abs(currentLat - region.latitude);
+    const lngDiff = Math.abs(currentLng - region.longitude);
+    const targetZoom = regionToZoom(region.latitudeDelta);
+    const currentZoom = map.getZoom() ?? targetZoom;
+
+    if (latDiff > 0.0005 || lngDiff > 0.0005) {
+      programmaticMoveRef.current = true;
+      map.panTo({ lat: region.latitude, lng: region.longitude });
+    }
+
+    if (Math.abs(currentZoom - targetZoom) > 0.1) {
+      programmaticMoveRef.current = true;
+      map.setZoom(targetZoom);
+    }
+  }, [region]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps) return;
+
+    markersRef.current.forEach((marker) => marker.setMap(null));
+    markersRef.current = combinedMarkers.map(
+      (marker) =>
+        new window.google.maps.Marker({
+          map,
+          position: { lat: marker.latitude, lng: marker.longitude },
+          title: marker.title,
+        }),
+    );
+  }, [combinedMarkers]);
+
+  const mergedStyle = useMemo<React.CSSProperties>(
+    () => ({
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      ...flattenStyle(style),
+    }),
+    [style],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      animateToRegion: (targetRegion: Region) => {
+        const map = mapRef.current;
+        if (!map) return;
+        programmaticMoveRef.current = true;
+        map.panTo({ lat: targetRegion.latitude, lng: targetRegion.longitude });
+        map.setZoom(regionToZoom(targetRegion.latitudeDelta));
+      },
+    }),
+    [],
+  );
+
+  return <div ref={containerRef} style={mergedStyle} />;
+});
+
+MapView.displayName = 'NativeMapWeb';
+
+export default MapView;
+export { Marker };

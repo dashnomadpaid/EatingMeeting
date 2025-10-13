@@ -10,7 +10,8 @@
       "@/hooks/*": ["./hooks/*"],
       "@/state/*": ["./state/*"],
       "@/types/*": ["./types/*"]
-    }
+    },
+    "types": ["google.maps"]
   },
   "include": [
     "**/*.ts",
