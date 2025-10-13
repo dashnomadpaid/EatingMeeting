@@ -248,6 +248,14 @@ export default function LoginScreen() {
               </Text>
             </View>
           )}
+
+          <View style={{ height: 12 }} />
+          <Text
+            style={[styles.link, { textAlign: 'center' }]}
+            onPress={() => router.push('/auth/login-password')}
+          >
+            비밀번호로 로그인
+          </Text>
         </KeyboardInset>
       </ScrollView>
     </Wrapper>
@@ -273,6 +281,7 @@ type Styles = {
   notice: TextStyle;
   noticeHidden: TextStyle;
   resend: TextStyle;
+  link: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -344,4 +353,5 @@ const styles = StyleSheet.create<Styles>({
     fontSize: 14,
     fontWeight: '500',
   },
+  link: { color: '#007aff', fontSize: 14, fontWeight: '500' },
 });

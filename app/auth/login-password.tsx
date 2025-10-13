@@ -124,6 +124,10 @@ export default function LoginPasswordScreen() {
           <Button title={loading ? '로그인 중…' : '로그인'} onPress={handleLogin} disabled={loading} />
 
           <View style={{ height: 8 }} />
+          <Text style={[styles.link, { textAlign: 'center' }]} onPress={() => router.push('/auth/login')}>
+            이메일 인증(OTP)으로 로그인
+          </Text>
+          <View style={{ height: 8 }} />
           <Text style={[styles.link, { textAlign: 'center' }]} onPress={() => router.push('/auth/signup')}>
             처음이신가요? 이메일 인증으로 회원가입
           </Text>

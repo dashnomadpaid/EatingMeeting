@@ -28,13 +28,8 @@ export default function Gate() {
     // Default to OTP login; password users can navigate to password screen.
     return <Redirect href="/auth/login" />;
   }
-  // If session exists but profile is not yet determined (not checked), optimistically go to tabs
+  // If session exists but no profile, go to onboarding to create one.
   if (session && !profile) {
-    if (!profileChecked || profileError) {
-      // Optimistically go to tabs; profile will hydrate later
-      return <Redirect href="/(tabs)" />;
-    }
-    // Definitively no profile
     return <Redirect href="/auth/onboarding" />;
   }
   return <Redirect href="/(tabs)" />;

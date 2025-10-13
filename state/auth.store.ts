@@ -60,9 +60,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   fetchProfile: async (userId) => {
     const currentSession = get().session;
     const fallback = () => {
-      const synthetic = buildFallbackProfile(userId, currentSession);
-      set({ profile: synthetic, profileChecked: true, profileError: true });
-      return synthetic;
+      // Do not set a synthetic profile into the store; this masks the absence of a real row.
+      // Instead, mark the check as completed with an error and keep profile as null so
+      // the gate can route to onboarding.
+      set({ profile: null, profileChecked: true, profileError: true });
+      return null;
     };
 
     try {
