@@ -28,6 +28,7 @@ export default function ChatScreen() {
       <FlatList
         data={threads}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: 16 }}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.threadItem}
@@ -67,7 +68,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F5F5F5',
   },
   header: {
     flexDirection: 'row',
@@ -77,18 +78,26 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    borderBottomColor: '#E5E5E5',
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
     lineHeight: 32,
+    color: '#000000',
   },
   threadItem: {
     flexDirection: 'row',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   threadInfo: {
     flex: 1,
@@ -104,14 +113,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
+    color: '#000000',
   },
   threadTime: {
-    fontSize: 12,
-    color: '#999',
+    fontSize: 13,
+    color: '#8E8E93',
   },
   lastMessage: {
     fontSize: 14,
-    color: '#666',
+    color: '#8E8E93',
   },
   empty: {
     padding: 48,
@@ -120,11 +130,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: '#000000',
     marginBottom: 8,
   },
   emptyHint: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: 15,
+    color: '#8E8E93',
   },
 });

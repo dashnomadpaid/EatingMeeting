@@ -10,6 +10,7 @@ import {
   FlatList,
   Image,
   Dimensions,
+  Animated,
 } from 'react-native';
 import MapView, { Marker, type Region } from '@/components/NativeMap';
 import { useCurrentLocation } from '@/hooks/useMap';
@@ -21,6 +22,7 @@ import { useMapStore } from '@/state/map.store';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { calculateDistance } from '@/lib/geo';
+import { fitMarkersRegion } from '@/lib/maps';
 import { BackButton } from '@/components/BackButton';
 
 const KOREA_BOUNDS = {
@@ -54,8 +56,7 @@ const MAX_LNG_DELTA = Math.max(0.5, KOREA_BOUNDS.maxLng - KOREA_BOUNDS.minLng - 
 const WINDOW_WIDTH = Dimensions.get('window').width;
 const CARD_WIDTH = Math.min(WINDOW_WIDTH * 0.8, 320);
 const CARD_SPACING = 16;
-const CARD_FULL_WIDTH = CARD_WIDTH + CARD_SPACING;
-const CARD_PEEK_PADDING = Math.max((WINDOW_WIDTH - CARD_WIDTH) / 2, 16);
+const CARD_PEEK_PADDING = (WINDOW_WIDTH - CARD_WIDTH) / 2 - CARD_SPACING / 2;
 
 function shortPlaceId(id?: string | null) {
   if (!id) return 'none';
@@ -67,8 +68,9 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function constrainRegion(region: Region): Region {
-  const latitudeDelta = clamp(region.latitudeDelta, 0.005, MAX_LAT_DELTA);
-  const longitudeDelta = clamp(region.longitudeDelta, 0.005, MAX_LNG_DELTA);
+  // Allow much tighter zoom for detailed viewing (0.0005 ≈ ~55m at equator)
+  const latitudeDelta = clamp(region.latitudeDelta, 0.0005, MAX_LAT_DELTA);
+  const longitudeDelta = clamp(region.longitudeDelta, 0.0005, MAX_LNG_DELTA);
   const latMin = KOREA_BOUNDS.minLat + latitudeDelta / 2;
   const latMax = KOREA_BOUNDS.maxLat - latitudeDelta / 2;
   const lngMin = KOREA_BOUNDS.minLng + longitudeDelta / 2;
@@ -93,21 +95,114 @@ function regionsApproxEqual(a: Region | null, b: Region | null) {
   );
 }
 
+// Separate component for carousel card to use hooks properly
+function CarouselCard({
+  item,
+  index,
+  activeIndex,
+  isActive,
+  onPress,
+}: {
+  item: GooglePlace;
+  index: number;
+  activeIndex: number;
+  isActive: boolean;
+  onPress: () => void;
+}) {
+  const distanceFromCenter = Math.abs(index - activeIndex);
+  
+  // Animated values for smooth transitions
+  const animatedScale = useRef(new Animated.Value(isActive ? 1.08 : 0.92)).current;
+  const animatedOpacity = useRef(new Animated.Value(isActive ? 1 : 0.6)).current;
+
+  // Smooth spring animation when active state changes
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(animatedScale, {
+        toValue: isActive ? 1.08 : Math.max(0.92, 1 - distanceFromCenter * 0.04),
+        useNativeDriver: true,
+        friction: 8,
+        tension: 40,
+      }),
+      Animated.timing(animatedOpacity, {
+        toValue: isActive ? 1 : Math.max(0.6, 1 - distanceFromCenter * 0.15),
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isActive, distanceFromCenter, animatedScale, animatedOpacity]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.carouselCardWrapper,
+        {
+          transform: [{ scale: animatedScale }],
+          opacity: animatedOpacity,
+        },
+      ]}
+    >
+      <TouchableOpacity
+        activeOpacity={0.85}
+        style={styles.carouselCardTouchable}
+        onPress={onPress}
+      >
+        <View style={[styles.selectedCard, isActive ? styles.selectedCardActive : null]}>
+          {item.photoUri ? (
+            <Image source={{ uri: item.photoUri }} style={styles.selectedImage} resizeMode="cover" />
+          ) : (
+            <View style={[styles.selectedImage, styles.calloutImagePlaceholder]}>
+              <Text style={styles.calloutPlaceholderText}>사진 없음</Text>
+            </View>
+          )}
+          <View style={styles.selectedBody}>
+            <Text style={styles.calloutTitle} numberOfLines={1}>
+              {item.name}
+            </Text>
+            {item.address ? (
+              <Text style={styles.calloutSubtitle} numberOfLines={1}>
+                {item.address}
+              </Text>
+            ) : null}
+            <View style={styles.calloutMetaRow}>
+              {typeof item.rating === 'number' ? (
+                <Text style={styles.calloutRating}>
+                  ⭐ {item.rating.toFixed(1)}
+                  {item.userRatingsTotal ? ` (${item.userRatingsTotal})` : ''}
+                </Text>
+              ) : null}
+              {item.primaryTypeDisplayName ? (
+                <Tag label={item.primaryTypeDisplayName} type="category" />
+              ) : item.types?.length ? (
+                <Tag label={item.types[0]} type="category" />
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 export default function MapScreen() {
   const { currentLocation, loading: locationLoading, error, requestLocation } = useCurrentLocation();
   const [region, setRegion] = useState<Region | null>(null);
   const [places, setPlaces] = useState<GooglePlace[]>([]);
   const [placesError, setPlacesError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
-  const [showList, setShowList] = useState(false);
   const [isCarouselVisible, setCarouselVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(-1);
   const abortRef = useRef<AbortController | null>(null);
   const fetchCounterRef = useRef(0);
   const mapRef = useRef<ComponentRef<typeof MapView> | null>(null);
   const carouselRef = useRef<FlatList<GooglePlace> | null>(null);
+  const isAnimatingToMarkerRef = useRef(false); // Track if we're currently animating to a marker selection
+  const isProgrammaticCarouselScrollRef = useRef(false);
+  const pendingProgrammaticScrollIndexRef = useRef<number | null>(null);
+  const programmaticScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storeSelectedGooglePlace = useMapStore((state) => state.selectedGooglePlace);
   const setSelectedGooglePlace = useMapStore((state) => state.setSelectedGooglePlace);
+  const setGooglePlaces = useMapStore((state) => state.setGooglePlaces);
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
   const selectedGooglePlaceRef = useRef<GooglePlace | null>(storeSelectedGooglePlace);
@@ -116,40 +211,102 @@ export default function MapScreen() {
     selectedGooglePlaceRef.current = storeSelectedGooglePlace;
   }, [storeSelectedGooglePlace]);
 
+  const clearProgrammaticCarouselScrollFlag = useCallback(() => {
+    if (programmaticScrollTimeoutRef.current) {
+      clearTimeout(programmaticScrollTimeoutRef.current);
+      programmaticScrollTimeoutRef.current = null;
+    }
+    isProgrammaticCarouselScrollRef.current = false;
+  }, []);
+
+  const markProgrammaticCarouselScroll = useCallback((duration: number) => {
+    isProgrammaticCarouselScrollRef.current = true;
+    if (programmaticScrollTimeoutRef.current) {
+      clearTimeout(programmaticScrollTimeoutRef.current);
+    }
+    programmaticScrollTimeoutRef.current = setTimeout(() => {
+      isProgrammaticCarouselScrollRef.current = false;
+      programmaticScrollTimeoutRef.current = null;
+    }, duration);
+  }, []);
+
+  const attemptProgrammaticScrollToIndex = useCallback(
+    (index: number, animated: boolean) => {
+      if (!carouselRef.current) {
+        return false;
+      }
+      const duration = animated ? 450 : 60;
+      markProgrammaticCarouselScroll(duration);
+      try {
+        // getItemLayout의 offset을 직접 사용하지 않고,
+        // 카드를 화면 중앙에 배치하기 위한 정확한 offset 계산
+        const cardOffset = (CARD_WIDTH + CARD_SPACING) * index;
+        const scrollOffset = cardOffset; // CARD_PEEK_PADDING이 이미 contentContainerStyle에 있음
+        
+        carouselRef.current.scrollToOffset({ 
+          offset: scrollOffset, 
+          animated 
+        });
+        return true;
+      } catch (error) {
+        clearProgrammaticCarouselScrollFlag();
+        throw error;
+      }
+    },
+    [clearProgrammaticCarouselScrollFlag, markProgrammaticCarouselScroll],
+  );
+
+  useEffect(() => {
+    return () => {
+      clearProgrammaticCarouselScrollFlag();
+    };
+  }, [clearProgrammaticCarouselScrollFlag]);
+
   useEffect(() => {
     if (!storeSelectedGooglePlace) {
       setActiveIndex(-1);
       setCarouselVisible(false);
       return;
     }
+    
+    // ✅ 선택된 place가 있으면 캐러셀 표시!
+    setCarouselVisible(true);
+    
     const index = places.findIndex((place) => place.id === storeSelectedGooglePlace.id);
-    if (index !== -1) {
+    console.log('[Effect] Syncing activeIndex:', index, 'for place:', storeSelectedGooglePlace.id);
+    if (index !== -1 && index !== activeIndex) {
+      pendingProgrammaticScrollIndexRef.current = index;
+      markProgrammaticCarouselScroll(600);
       setActiveIndex(index);
     }
-  }, [places, storeSelectedGooglePlace]);
-
-  useEffect(() => {
-    if (showList) {
-      setCarouselVisible(false);
-    }
-  }, [showList]);
+  }, [places, storeSelectedGooglePlace, activeIndex, markProgrammaticCarouselScroll]);
 
   useEffect(() => {
     if (!isCarouselVisible || activeIndex < 0) {
       return;
     }
+    if (pendingProgrammaticScrollIndexRef.current !== activeIndex) {
+      return;
+    }
+    const targetIndex = activeIndex;
     requestAnimationFrame(() => {
       try {
-        carouselRef.current?.scrollToIndex({ index: activeIndex, animated: true });
+        if (attemptProgrammaticScrollToIndex(targetIndex, true)) {
+          pendingProgrammaticScrollIndexRef.current = null;
+        }
       } catch {
         setTimeout(() => {
           try {
-            carouselRef.current?.scrollToIndex({ index: activeIndex, animated: true });
-          } catch {}
+            if (attemptProgrammaticScrollToIndex(targetIndex, true)) {
+              pendingProgrammaticScrollIndexRef.current = null;
+            }
+          } catch {
+            pendingProgrammaticScrollIndexRef.current = null;
+          }
         }, 100);
       }
     });
-  }, [isCarouselVisible, activeIndex]);
+  }, [attemptProgrammaticScrollToIndex, isCarouselVisible, activeIndex]);
 
   const loadPlaces = useCallback((nextRegion: Region) => {
     abortRef.current?.abort();
@@ -188,20 +345,26 @@ export default function MapScreen() {
                   ) <= MAX_SEARCH_RADIUS_KM,
               )
             : limited;
+        
+        // Sort by longitude (ascending): West (smaller lng) → left, East (larger lng) → right
+        const sortedByLongitude = [...withinRadius].sort((a, b) => a.lng - b.lng);
+        
         console.log(
           `[Places][${requestId}] ✓ success`,
-          `received=${withinRadius.length}`,
+          `received=${sortedByLongitude.length}`,
           `raw=${limited.length}`,
+          `sorted by longitude (west→east)`,
         );
-        setPlaces(withinRadius);
+        setPlaces(sortedByLongitude);
+        setGooglePlaces(sortedByLongitude);
         setPlacesError(null);
         const currentSelected = selectedGooglePlaceRef.current;
         if (currentSelected) {
-          const stillExists = withinRadius.some((place) => place.id === currentSelected.id);
-          if (!stillExists && withinRadius.length > 0) {
+          const stillExists = sortedByLongitude.some((place) => place.id === currentSelected.id);
+          if (!stillExists && sortedByLongitude.length > 0) {
             if (DEBUG_PLACE_SYNC) {
               console.log(
-                `[MAP] ✂ pruned from results id=${shortPlaceId(currentSelected.id)} remaining=${withinRadius.length}`,
+                `[MAP] ✂ pruned from results id=${shortPlaceId(currentSelected.id)} remaining=${sortedByLongitude.length}`,
               );
             }
             setSelectedGooglePlace(null);
@@ -227,15 +390,20 @@ export default function MapScreen() {
                   ) <= MAX_SEARCH_RADIUS_KM,
               )
             : FALLBACK_GOOGLE_PLACES;
-        setPlaces(fallbackPlaces);
+        
+        // Sort fallback places by longitude (west → east) too
+        const sortedFallback = [...fallbackPlaces].sort((a, b) => a.lng - b.lng);
+        
+        setPlaces(sortedFallback);
+        setGooglePlaces(sortedFallback);
         setPlacesError(message);
         const currentSelected = selectedGooglePlaceRef.current;
         if (currentSelected) {
-          const stillExists = fallbackPlaces.some((place) => place.id === currentSelected.id);
-          if (!stillExists && fallbackPlaces.length > 0) {
+          const stillExists = sortedFallback.some((place) => place.id === currentSelected.id);
+          if (!stillExists && sortedFallback.length > 0) {
             if (DEBUG_PLACE_SYNC) {
               console.log(
-                `[MAP] ✂ pruned (fallback) id=${shortPlaceId(currentSelected.id)} remaining=${fallbackPlaces.length}`,
+                `[MAP] ✂ pruned (fallback) id=${shortPlaceId(currentSelected.id)} remaining=${sortedFallback.length}`,
               );
             }
             setSelectedGooglePlace(null);
@@ -266,8 +434,17 @@ export default function MapScreen() {
   }, [places, storeSelectedGooglePlace, setSelectedGooglePlace]);
 
   const handleRegionChangeComplete = useCallback((nextRegion: Region) => {
+    // Skip if we're currently animating to a marker selection to prevent conflicts
+    if (isAnimatingToMarkerRef.current) {
+      console.log('[RegionChange] Skipping - marker animation in progress');
+      return;
+    }
+    
+    // Update internal region state for reference (but don't pass to MapView as controlled prop)
     const constrained = constrainRegion(nextRegion);
     setRegion((prev) => (regionsApproxEqual(prev, constrained) ? prev : constrained));
+    
+    // Only animate if significantly out of bounds
     if (!regionsApproxEqual(nextRegion, constrained)) {
       const latDiff = Math.abs(nextRegion.latitude - constrained.latitude);
       const lngDiff = Math.abs(nextRegion.longitude - constrained.longitude);
@@ -301,6 +478,13 @@ export default function MapScreen() {
     const constrained = constrainRegion(nextRegion);
     setRegion(constrained);
     loadPlaces(constrained);
+    
+    // Animate to initial location smoothly
+    if (mapRef.current && 'animateToRegion' in mapRef.current) {
+      setTimeout(() => {
+        mapRef.current && 'animateToRegion' in mapRef.current && mapRef.current.animateToRegion(constrained, 800);
+      }, 100);
+    }
   }, [currentLocation, loadPlaces]);
 
   useEffect(() => {
@@ -308,6 +492,41 @@ export default function MapScreen() {
       abortRef.current?.abort();
     };
   }, []);
+
+  // Fit all markers in view when places change (unless a specific marker is selected)
+  useEffect(() => {
+    if (places.length === 0 || !mapRef.current || isAnimatingToMarkerRef.current) {
+      return;
+    }
+    
+    // Don't auto-fit if user has selected a specific place
+    if (storeSelectedGooglePlace && isCarouselVisible) {
+      return;
+    }
+    
+    const markers = places.map(place => ({
+      id: place.id,
+      coordinate: { latitude: place.lat, longitude: place.lng },
+      title: place.name,
+    }));
+    
+    const fittedRegion = fitMarkersRegion(markers);
+    if (fittedRegion && 'animateToRegion' in mapRef.current) {
+      // Apply minimal constraints to ensure all markers are visible
+      const constrained: Region = {
+        latitude: clamp(fittedRegion.latitude, KOREA_BOUNDS.minLat, KOREA_BOUNDS.maxLat),
+        longitude: clamp(fittedRegion.longitude, KOREA_BOUNDS.minLng, KOREA_BOUNDS.maxLng),
+        latitudeDelta: Math.min(fittedRegion.latitudeDelta, MAX_LAT_DELTA),
+        longitudeDelta: Math.min(fittedRegion.longitudeDelta, MAX_LNG_DELTA),
+      };
+      console.log('[Places] Fitting all markers in view:', places.length, 'places', constrained);
+      setTimeout(() => {
+        if (mapRef.current && 'animateToRegion' in mapRef.current) {
+          mapRef.current.animateToRegion(constrained, 800);
+        }
+      }, 300);
+    }
+  }, [places, storeSelectedGooglePlace, isCarouselVisible]);
 
   const selectedPlace = useMemo(() => {
     if (!storeSelectedGooglePlace) {
@@ -320,21 +539,32 @@ export default function MapScreen() {
   const handleCalloutPress = useCallback(
     (place: GooglePlace) => {
       setSelectedGooglePlace(place);
-      setShowList(false);
       router.push({
         pathname: '/place/[id]',
         params: { id: place.id },
       });
     },
-    [setSelectedGooglePlace, setShowList],
+    [setSelectedGooglePlace],
   );
 
   const handleMarkerPress = useCallback(
     (place: GooglePlace) => {
-      setShowList(false);
-      setCarouselVisible(true);
-      setSelectedGooglePlace(place);
+      console.log('[MarkerPress] Selected place:', place.id, place.name);
+      
+      // Find index immediately before any state updates
+      const index = places.findIndex((item) => item.id === place.id);
+      console.log('[MarkerPress] Place index:', index, '/', places.length);
+      
+      if (index === -1) {
+        console.warn('[MarkerPress] Place not found in list!');
+        return;
+      }
 
+      // Set flag to prevent handleRegionChangeComplete from interfering
+      isAnimatingToMarkerRef.current = true;
+      console.log('[MarkerPress] Animation flag set to true');
+
+      // Calculate target region
       const currentDelta = region
         ? Math.min(region.latitudeDelta, CLUSTER_DELTA_THRESHOLD * 0.9)
         : DEFAULT_DELTA;
@@ -344,28 +574,55 @@ export default function MapScreen() {
         latitudeDelta: currentDelta,
         longitudeDelta: currentDelta,
       });
-      setRegion(nextRegion);
+
+      // Update UI states (but NOT setRegion - let map animate freely)
+      setCarouselVisible(true);
+      pendingProgrammaticScrollIndexRef.current = index;
+      markProgrammaticCarouselScroll(600);
+      setActiveIndex(index);
+      setSelectedGooglePlace(place);
+      
+      // Animate map to selected place smoothly
       if (mapRef.current && 'animateToRegion' in mapRef.current) {
-        mapRef.current.animateToRegion(nextRegion, 250);
+        console.log('[MarkerPress] Animating to region:', nextRegion);
+        mapRef.current.animateToRegion(nextRegion, 500);
       }
 
-      const index = places.findIndex((item) => item.id === place.id);
-      if (index !== -1) {
-        setActiveIndex(index);
-        requestAnimationFrame(() => {
-          try {
-            carouselRef.current?.scrollToIndex({ index, animated: true });
-          } catch (error) {
-            setTimeout(() => {
-              try {
-                carouselRef.current?.scrollToIndex({ index, animated: true });
-              } catch {}
-            }, 100);
+      // Clear animation flag after animation completes
+      setTimeout(() => {
+        isAnimatingToMarkerRef.current = false;
+        console.log('[MarkerPress] Animation flag cleared');
+      }, 550); // Slightly longer than animation duration
+
+      // Scroll carousel to selected card with delay for state update
+      setTimeout(() => {
+        if (pendingProgrammaticScrollIndexRef.current !== index) {
+          return;
+        }
+        try {
+          console.log('[MarkerPress] Scrolling to index:', index);
+          if (attemptProgrammaticScrollToIndex(index, true)) {
+            pendingProgrammaticScrollIndexRef.current = null;
           }
-        });
-      }
+        } catch (error) {
+          console.warn('[MarkerPress] Scroll failed, retrying...', error);
+          setTimeout(() => {
+            if (pendingProgrammaticScrollIndexRef.current !== index) {
+              return;
+            }
+            try {
+              if (attemptProgrammaticScrollToIndex(index, false)) {
+                pendingProgrammaticScrollIndexRef.current = null;
+              }
+            } catch (e) {
+              pendingProgrammaticScrollIndexRef.current = null;
+              console.error('[MarkerPress] Second scroll attempt failed', e);
+            }
+          }, 120);
+        }
+      }, 50);
     },
-    [places, region, setSelectedGooglePlace, setShowList],
+    [attemptProgrammaticScrollToIndex, markProgrammaticCarouselScroll, places, region, setSelectedGooglePlace],
   );
 
   const handleMapPress = useCallback(
@@ -377,8 +634,38 @@ export default function MapScreen() {
     [setSelectedGooglePlace],
   );
 
+  const handleFitAllMarkers = useCallback(() => {
+    if (places.length === 0 || !mapRef.current) return;
+    
+    const markers = places.map(place => ({
+      id: place.id,
+      coordinate: { latitude: place.lat, longitude: place.lng },
+      title: place.name,
+    }));
+    
+    const fittedRegion = fitMarkersRegion(markers);
+    if (fittedRegion && 'animateToRegion' in mapRef.current) {
+      // Apply constraints but ensure all markers are visible
+      // Only constrain center point, let deltas be as needed for all markers
+      const constrained: Region = {
+        latitude: clamp(fittedRegion.latitude, KOREA_BOUNDS.minLat, KOREA_BOUNDS.maxLat),
+        longitude: clamp(fittedRegion.longitude, KOREA_BOUNDS.minLng, KOREA_BOUNDS.maxLng),
+        latitudeDelta: Math.min(fittedRegion.latitudeDelta, MAX_LAT_DELTA),
+        longitudeDelta: Math.min(fittedRegion.longitudeDelta, MAX_LNG_DELTA),
+      };
+      console.log('[FitAllMarkers] Showing all', places.length, 'markers', constrained);
+      setCarouselVisible(false);
+      setSelectedGooglePlace(null);
+      mapRef.current.animateToRegion(constrained, 800);
+    }
+  }, [places, setSelectedGooglePlace]);
+
   const getItemLayout = useCallback(
-    (_: unknown, index: number) => ({ length: CARD_FULL_WIDTH, offset: CARD_FULL_WIDTH * index, index }),
+    (_: unknown, index: number) => ({
+      length: CARD_WIDTH + CARD_SPACING,
+      offset: CARD_PEEK_PADDING + (CARD_WIDTH + CARD_SPACING) * index,
+      index,
+    }),
     [],
   );
 
@@ -387,6 +674,9 @@ export default function MapScreen() {
   const handleViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: Array<{ index?: number | null }> }) => {
       if (!isCarouselVisible || viewableItems.length === 0) {
+        return;
+      }
+      if (isProgrammaticCarouselScrollRef.current) {
         return;
       }
       const first = viewableItems.find((item) => item.index !== null && item.index !== undefined);
@@ -412,18 +702,33 @@ export default function MapScreen() {
           latitudeDelta: delta,
           longitudeDelta: delta,
         });
-        setRegion(nextRegion);
+        // Smooth animation without setRegion
         if (mapRef.current && 'animateToRegion' in mapRef.current) {
-          mapRef.current.animateToRegion(nextRegion, 250);
+          console.log('[ViewableChanged] Animating to:', nextPlace.name);
+          mapRef.current.animateToRegion(nextRegion, 500);
         }
       }
     },
     [activeIndex, isCarouselVisible, places, region, setSelectedGooglePlace, storeSelectedGooglePlace],
   );
 
+  // Store latest handler in ref to avoid recreating viewabilityConfigCallbackPairs
+  const viewabilityHandlerRef = useRef(handleViewableItemsChanged);
+  useEffect(() => {
+    viewabilityHandlerRef.current = handleViewableItemsChanged;
+  }, [handleViewableItemsChanged]);
+
+  // Stable viewabilityConfigCallbackPairs - never changes after mount
   const viewabilityConfigPairs = useMemo(
-    () => [{ viewabilityConfig, onViewableItemsChanged: handleViewableItemsChanged }],
-    [handleViewableItemsChanged, viewabilityConfig],
+    () => [
+      {
+        viewabilityConfig: { itemVisiblePercentThreshold: 80 },
+        onViewableItemsChanged: (info: { viewableItems: Array<{ index?: number | null }> }) => {
+          viewabilityHandlerRef.current(info);
+        },
+      },
+    ],
+    [], // Empty deps - created once and never changes
   );
 
   const handleScrollToIndexFailed = useCallback(
@@ -431,59 +736,31 @@ export default function MapScreen() {
       setTimeout(() => {
         if (index < places.length) {
           try {
-            carouselRef.current?.scrollToIndex({ index, animated: true });
+            if (attemptProgrammaticScrollToIndex(index, true)) {
+              if (pendingProgrammaticScrollIndexRef.current === index) {
+                pendingProgrammaticScrollIndexRef.current = null;
+              }
+            }
           } catch {}
         }
       }, 200);
     },
-    [places.length],
+    [attemptProgrammaticScrollToIndex, places.length],
   );
 
   const renderCarouselItem = useCallback(
-    ({ item }: { item: GooglePlace }) => {
-      const isActive = storeSelectedGooglePlace?.id === item.id;
+    ({ item, index }: { item: GooglePlace; index: number }) => {
       return (
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[styles.carouselCardWrapper, isActive ? styles.carouselCardWrapperActive : null]}
+        <CarouselCard
+          item={item}
+          index={index}
+          activeIndex={activeIndex}
+          isActive={storeSelectedGooglePlace?.id === item.id}
           onPress={() => handleCalloutPress(item)}
-        >
-          <View style={[styles.selectedCard, isActive ? styles.selectedCardActive : null]}>
-            {item.photoUri ? (
-              <Image source={{ uri: item.photoUri }} style={styles.selectedImage} resizeMode="cover" />
-            ) : (
-              <View style={[styles.selectedImage, styles.calloutImagePlaceholder]}>
-                <Text style={styles.calloutPlaceholderText}>사진 없음</Text>
-              </View>
-            )}
-            <View style={styles.selectedBody}>
-              <Text style={styles.calloutTitle} numberOfLines={1}>
-                {item.name}
-              </Text>
-              {item.address ? (
-                <Text style={styles.calloutSubtitle} numberOfLines={1}>
-                  {item.address}
-                </Text>
-              ) : null}
-              <View style={styles.calloutMetaRow}>
-                {typeof item.rating === 'number' ? (
-                  <Text style={styles.calloutRating}>
-                    ⭐ {item.rating.toFixed(1)}
-                    {item.userRatingsTotal ? ` (${item.userRatingsTotal})` : ''}
-                  </Text>
-                ) : null}
-                {item.primaryTypeDisplayName ? (
-                  <Tag label={item.primaryTypeDisplayName} type="category" />
-                ) : item.types?.length ? (
-                  <Tag label={item.types[0]} type="category" />
-                ) : null}
-              </View>
-            </View>
-          </View>
-        </TouchableOpacity>
+        />
       );
     },
-    [handleCalloutPress, storeSelectedGooglePlace],
+    [activeIndex, handleCalloutPress, storeSelectedGooglePlace?.id],
   );
 
   if (locationLoading && !currentLocation) {
@@ -519,35 +796,40 @@ export default function MapScreen() {
         ref={mapRef}
         style={styles.map}
         initialRegion={region}
-        region={region}
         onRegionChangeComplete={handleRegionChangeComplete}
         onPress={handleMapPress}
         showsUserLocation
       >
         {!isWeb &&
-          places.map((place) => {
+          places.map((place, idx) => {
             const isActive = storeSelectedGooglePlace?.id === place.id;
+            const isActiveByIndex = idx === activeIndex;
+            const shouldHighlight = isActive || isActiveByIndex;
+            
             return (
               <Marker
                 key={place.id}
                 coordinate={{ latitude: place.lat, longitude: place.lng }}
                 onPress={() => handleMarkerPress(place)}
-                tracksViewChanges={false}
-              >
-                <View style={[styles.markerBubble, isActive ? styles.markerBubbleActive : null]}>
-                  <View style={styles.markerDot} />
-                </View>
-              </Marker>
+                pinColor={shouldHighlight ? '#FF6B35' : '#FF9E62'}
+                zIndex={shouldHighlight ? 10 : 1}
+              />
             );
           })}
       </MapView>
-      {!showList ? (
-        <View style={[styles.topControls, { top: insets.top + 12 }]}>
-          <TouchableOpacity style={styles.listButton} onPress={() => setShowList(true)}>
-            <Text style={styles.listButtonText}>목록 보기</Text>
+      <View style={[styles.topControls, { top: insets.top + 12 }]}>
+        <TouchableOpacity style={styles.listButton} onPress={() => router.push('/map/list')}>
+          <Text style={styles.listButtonText}>목록 보기</Text>
+        </TouchableOpacity>
+        {places.length > 1 && (
+          <TouchableOpacity 
+            style={[styles.listButton, { marginLeft: 8 }]} 
+            onPress={handleFitAllMarkers}
+          >
+            <Text style={styles.listButtonText}>전체 보기</Text>
           </TouchableOpacity>
-        </View>
-      ) : null}
+        )}
+      </View>
       {placesError ? (
         <View style={[styles.errorBanner, { top: insets.top + 60 }]}>
           <Text style={styles.errorBannerText} numberOfLines={2}>
@@ -561,95 +843,23 @@ export default function MapScreen() {
           <Text style={styles.loaderText}>주변 장소 업데이트 중...</Text>
         </View>
       ) : null}
-      {!showList && selectedPlace ? (
-        <TouchableOpacity
-          style={[styles.selectedOverlay, { bottom: insets.bottom + 24 }]}
-          activeOpacity={0.85}
-          onPress={() => handleCalloutPress(selectedPlace)}
-        >
-          <View style={styles.selectedCard}>
-            {selectedPlace.photoUri ? (
-              <Image
-                source={{ uri: selectedPlace.photoUri }}
-                style={styles.selectedImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={[styles.selectedImage, styles.calloutImagePlaceholder]}>
-                <Text style={styles.calloutPlaceholderText}>사진 없음</Text>
-              </View>
-            )}
-            <View style={styles.selectedBody}>
-              <Text style={styles.calloutTitle}>{selectedPlace.name}</Text>
-              {selectedPlace.address ? (
-                <Text style={styles.calloutSubtitle}>{selectedPlace.address}</Text>
-              ) : null}
-              <View style={styles.calloutMetaRow}>
-                {typeof selectedPlace.rating === 'number' ? (
-                  <Text style={styles.calloutRating}>
-                    ⭐ {selectedPlace.rating.toFixed(1)}
-                    {selectedPlace.userRatingsTotal ? ` (${selectedPlace.userRatingsTotal})` : ''}
-                  </Text>
-                ) : null}
-                {selectedPlace.primaryTypeDisplayName ? (
-                  <Tag label={selectedPlace.primaryTypeDisplayName} type="category" />
-                ) : selectedPlace.types?.length ? (
-                  <Tag label={selectedPlace.types[0]} type="category" />
-                ) : null}
-              </View>
-            </View>
-          </View>
-        </TouchableOpacity>
-      ) : null}
-      {showList ? (
-        <View style={[styles.listContainer, { paddingTop: insets.top + 12 }]}>
-          <View style={styles.listHeader}>
-            <BackButton alwaysShow onPress={() => setShowList(false)} />
-            <Text style={styles.listTitle}>주변 식당 목록</Text>
-            <View style={{ width: 44 }} />
-          </View>
+      {places.length > 0 && isCarouselVisible ? (
+        <View style={[styles.carouselContainer, { bottom: insets.bottom + 24 }]}>
           <FlatList
+            ref={carouselRef}
             data={places}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carouselContent}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.listItem}
-                onPress={() => {
-                  const currentDelta = region
-                    ? Math.min(region.latitudeDelta, CLUSTER_DELTA_THRESHOLD * 0.9)
-                    : DEFAULT_DELTA;
-                  const nextRegion = constrainRegion({
-                    latitude: item.lat,
-                    longitude: item.lng,
-                    latitudeDelta: currentDelta,
-                    longitudeDelta: currentDelta,
-                  });
-                  setRegion(nextRegion);
-                  if (mapRef.current && 'animateToRegion' in mapRef.current) {
-                    mapRef.current.animateToRegion(nextRegion, 350);
-                  }
-                  setSelectedGooglePlace(item);
-                  setShowList(false);
-                }}
-              >
-                <View style={styles.listItemHeader}>
-                  <Text style={styles.listItemTitle}>{item.name}</Text>
-                  {typeof item.rating === 'number' ? (
-                    <Text style={styles.listItemRating}>
-                      ⭐ {item.rating.toFixed(1)}
-                      {item.userRatingsTotal ? ` · ${item.userRatingsTotal}` : ''}
-                    </Text>
-                  ) : null}
-                </View>
-                {item.address ? <Text style={styles.listItemAddress}>{item.address}</Text> : null}
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={
-              <View style={styles.listEmpty}>
-                <Text style={styles.listEmptyText}>표시할 장소가 없습니다.</Text>
-              </View>
-            }
+            renderItem={renderCarouselItem}
+            snapToInterval={CARD_WIDTH + CARD_SPACING}
+            decelerationRate="fast"
+            bounces={false}
+            getItemLayout={getItemLayout}
+            viewabilityConfigCallbackPairs={viewabilityConfigPairs}
+            onScrollToIndexFailed={handleScrollToIndexFailed}
+            extraData={storeSelectedGooglePlace?.id}
           />
         </View>
       ) : null}
@@ -682,6 +892,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   listButton: {
     paddingHorizontal: 14,
@@ -729,31 +941,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  markerBubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#FF9E62',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  markerBubbleActive: {
-    borderColor: '#FF6B35',
-    shadowOpacity: 0.28,
-  },
-  markerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF6B35',
-  },
   calloutImagePlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -783,12 +970,28 @@ const styles = StyleSheet.create({
     color: '#FF6B35',
     marginRight: 12,
   },
-  selectedOverlay: {
+  carouselContainer: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 0,
+    right: 0,
+  },
+  carouselContent: {
+    paddingHorizontal: CARD_PEEK_PADDING,
+    paddingBottom: 12,
+    paddingTop: 16,
+  },
+  carouselCardWrapper: {
+    width: CARD_WIDTH + CARD_SPACING,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: CARD_SPACING / 2,
+  },
+  carouselCardTouchable: {
+    width: CARD_WIDTH,
   },
   selectedCard: {
+    width: CARD_WIDTH,
     borderRadius: 18,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
@@ -799,8 +1002,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   selectedCardActive: {
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    elevation: 16,
   },
   selectedImage: {
     width: '100%',
@@ -810,81 +1014,5 @@ const styles = StyleSheet.create({
   selectedBody: {
     paddingHorizontal: 16,
     paddingVertical: 14,
-  },
-  carouselContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-  },
-  carouselContent: {
-    paddingHorizontal: CARD_PEEK_PADDING,
-    paddingBottom: 12,
-  },
-  carouselCardWrapper: {
-    width: CARD_WIDTH,
-    marginRight: CARD_SPACING,
-  },
-  carouselCardWrapperActive: {
-    transform: [{ translateY: -4 }],
-  },
-  listContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-  },
-  listHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#222',
-  },
-  listContent: {
-    paddingBottom: 16,
-  },
-  listItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5E5',
-  },
-  listItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  listItemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222222',
-    flex: 1,
-    marginRight: 12,
-  },
-  listItemRating: {
-    fontSize: 12,
-    color: '#FF874B',
-  },
-  listItemAddress: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#666666',
-  },
-  listEmpty: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  listEmptyText: {
-    fontSize: 14,
-    color: '#777777',
   },
 });

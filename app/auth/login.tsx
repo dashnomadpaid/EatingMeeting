@@ -32,6 +32,9 @@ export default function LoginScreen() {
   const otpRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
   const { session, logout, setProfile } = useAuthStore() as any;
+  const handleOpenDebug = React.useCallback(() => {
+    router.push('/debug/supabase');
+  }, []);
 
   // Ensure clean state when entering login screen
   const didCleanupRef = useRef(false);
@@ -39,7 +42,14 @@ export default function LoginScreen() {
     if (didCleanupRef.current) return;
     didCleanupRef.current = true;
     if (session) {
-      logout().catch(() => {});
+      console.log(
+        `[LOGIN] existing session detected (${session.user?.id?.slice(0, 6) ?? 'none'}) -> logout()`,
+      );
+      logout().catch((error: unknown) => {
+        console.warn('[LOGIN] logout during mount failed', (error as Error)?.message);
+      });
+    } else {
+      console.log('[LOGIN] no existing session on login mount');
     }
   }, []);
 
@@ -67,8 +77,10 @@ export default function LoginScreen() {
     }
     try {
       setLoading(true);
+      console.log('[LOGIN] send OTP request', { email: normalized });
       const { error } = await sendOTP(normalized);
       if (error) throw error;
+  console.log('[LOGIN] OTP sent successfully');
       setOtp('');
       setOtpSent(true);
       setSentEmail(normalized);
@@ -108,6 +120,7 @@ export default function LoginScreen() {
       ]);
       const { error } = (result as { error: Error | null }) ?? { error: null };
       if (error) throw error;
+  console.log('[LOGIN] OTP verify succeeded');
 
       // Proactively load profile to avoid brief onboarding redirect
       try {
@@ -116,6 +129,7 @@ export default function LoginScreen() {
             const { data: userRes } = await supabase.auth.getUser();
             const userId = userRes?.user?.id;
             if (userId) {
+              console.log('[LOGIN] hydrate profile before gate', { userId: userId.slice(0, 6) + '…' });
               const { data: prof } = await supabase
                 .from('profiles')
                 .select('*')
@@ -132,11 +146,13 @@ export default function LoginScreen() {
                   photos: photos || [],
                   primaryPhoto: photos?.find((p: any) => p.is_primary) || photos?.[0],
                 });
+                console.log('[LOGIN] profile hydrated -> replace /(tabs)');
                 router.replace('/(tabs)');
                 return;
               }
             }
             // If profile not found, fall back to gate
+            console.log('[LOGIN] profile missing after OTP -> return to gate for onboarding');
             router.replace('/');
           })(),
           new Promise<never>((_, reject) =>
@@ -149,6 +165,7 @@ export default function LoginScreen() {
       }
     } catch (e: any) {
       const msg = e?.message ?? '코드가 유효하지 않거나 만료되었습니다';
+      console.warn('[LOGIN] verify failed', msg);
       Alert.alert('오류', msg);
     } finally {
       setLoading(false);
@@ -159,9 +176,11 @@ export default function LoginScreen() {
     if (otpSent) {
       if (sentEmail && value !== sentEmail) {
         setNeedsResend(true);
+        console.log('[LOGIN] email changed -> require resend', { previous: sentEmail, next: value });
         if (otp) setOtp('');
       } else if (sentEmail && value === sentEmail) {
         setNeedsResend(false);
+        console.log('[LOGIN] email reverted -> resend not required');
       }
     }
     setEmail(value);
@@ -256,6 +275,13 @@ export default function LoginScreen() {
           >
             비밀번호로 로그인
           </Text>
+
+          <Text
+            style={[styles.link, styles.debugLink]}
+            onPress={handleOpenDebug}
+          >
+            Supabase 디버그 화면 열기
+          </Text>
         </KeyboardInset>
       </ScrollView>
     </Wrapper>
@@ -282,6 +308,7 @@ type Styles = {
   noticeHidden: TextStyle;
   resend: TextStyle;
   link: TextStyle;
+  debugLink: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -354,4 +381,9 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: '500',
   },
   link: { color: '#007aff', fontSize: 14, fontWeight: '500' },
+  debugLink: {
+    marginTop: 12,
+    textAlign: 'center',
+    color: '#34d399',
+  },
 });

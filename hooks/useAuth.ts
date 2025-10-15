@@ -19,18 +19,27 @@ export function useAuth() {
     profileChecked,
     profileError,
     fetchProfile,
+    profilePending,
+    profileErrorReason,
   } = useAuthStore() as any;
   const profileRetryRef = useRef(false);
 
   useEffect(() => {
     if (!didBootstrap) {
       didBootstrap = true;
+      console.log('[AUTH:hook] bootstrap initialize()');
       initialize();
     }
 
     if (!didSubscribe) {
       didSubscribe = true;
+      console.log('[AUTH:hook] subscribing to auth state changes');
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log(
+          `[AUTH:onAuthStateChange] event=${event} session=${
+            session?.user?.id ? session.user.id.slice(0, 6) + '…' : 'none'
+          }`,
+        );
         setSession(session);
 
         const shouldHydrate =
@@ -38,14 +47,21 @@ export function useAuth() {
           (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED');
 
         if (shouldHydrate) {
+          console.log(`[AUTH:onAuthStateChange] hydrate profile for ${session.user.id}`);
           try {
             await fetchProfile(session!.user.id);
           } catch (err) {
             console.warn('[AUTH:onAuthStateChange] hydrate error', (err as Error)?.message);
           }
         } else if (event === 'SIGNED_OUT' || !session?.user) {
+          console.log('[AUTH:onAuthStateChange] clearing profile (signed out)');
           setProfile(null);
-          useAuthStore.setState({ profileChecked: false, profileError: false });
+          useAuthStore.setState({
+            profileChecked: false,
+            profileError: false,
+            profilePending: false,
+            profileErrorReason: null,
+          });
         }
       });
       // Note: do not unsubscribe here to avoid tearing down global listener
@@ -57,25 +73,35 @@ export function useAuth() {
       profileRetryRef.current = false;
       return;
     }
-    if (!loading && !profile && !profileChecked) {
+    if (!loading && !profile && !profileChecked && !profilePending) {
+      console.log(
+        `[AUTH:autoFetchProfile] triggering fetch (profile missing) user=${
+          session.user.id.slice(0, 6) + '…'
+        }`,
+      );
       fetchProfile(session.user.id).catch((err: Error) => {
         console.warn('[AUTH:autoFetchProfile] hydrate error', err?.message);
       });
     }
-  }, [session?.user?.id, loading, profile, profileChecked, fetchProfile]);
+  }, [session?.user?.id, loading, profile, profileChecked, fetchProfile, profilePending]);
 
   useEffect(() => {
     if (!session?.user) {
       profileRetryRef.current = false;
       return;
     }
-    if (!loading && profileError && !profileRetryRef.current) {
+    if (!loading && profileError && !profileRetryRef.current && !profilePending) {
+      console.log(
+        `[AUTH:retryFetchProfile] retrying profile fetch user=${
+          session.user.id?.slice(0, 6) + '…'
+        }`,
+      );
       profileRetryRef.current = true;
       fetchProfile(session.user.id).catch((err: Error) => {
         console.warn('[AUTH:retryFetchProfile] hydrate error', err?.message);
       });
     }
-  }, [session?.user?.id, loading, profileError, fetchProfile]);
+  }, [session?.user?.id, loading, profileError, fetchProfile, profilePending]);
 
   useEffect(() => {
     if (!profileError) {
@@ -83,7 +109,17 @@ export function useAuth() {
     }
   }, [profileError]);
 
-  return { session, profile, loading, logout, profileChecked, profileError };
+  return {
+    session,
+    profile,
+    loading,
+    logout,
+    profileChecked,
+    profileError,
+    profilePending,
+    profileErrorReason,
+    fetchProfile,
+  };
 }
 
 export function useRequireAuth() {

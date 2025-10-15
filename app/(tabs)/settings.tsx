@@ -44,6 +44,10 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleOpenDebug = () => {
+    router.push('/debug/supabase');
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -125,6 +129,10 @@ export default function SettingsScreen() {
       >
         <LogOut color="#FF3B30" size={20} />
         <Text style={styles.logoutText}>{loggingOut ? '로그아웃 중...' : '로그아웃'}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.debugButton} onPress={handleOpenDebug}>
+        <Text style={styles.debugText}>Supabase 디버그 실행</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -227,6 +235,19 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     color: '#FF3B30',
+    fontWeight: '600',
+  },
+  debugButton: {
+    marginHorizontal: 16,
+    marginBottom: 32,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#1F2937',
+    alignItems: 'center',
+  },
+  debugText: {
+    color: '#F9FAFB',
+    fontSize: 15,
     fontWeight: '600',
   },
   placeholderCard: {

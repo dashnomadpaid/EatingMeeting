@@ -12,11 +12,13 @@ function shortId(id?: string | null) {
 interface MapState {
   currentLocation: Coordinates | null;
   places: Place[];
+  googlePlaces: GooglePlace[];
   filters: PlaceFilters;
   selectedPlace: Place | null;
   selectedGooglePlace: GooglePlace | null;
   setCurrentLocation: (location: Coordinates | null) => void;
   setPlaces: (places: Place[]) => void;
+  setGooglePlaces: (places: GooglePlace[]) => void;
   setFilters: (filters: Partial<PlaceFilters>) => void;
   selectPlace: (place: Place | null) => void;
   setSelectedGooglePlace: (place: GooglePlace | null) => void;
@@ -25,6 +27,7 @@ interface MapState {
 export const useMapStore = create<MapState>((set) => ({
   currentLocation: null,
   places: [],
+  googlePlaces: [],
   selectedPlace: null,
   selectedGooglePlace: null,
   filters: {
@@ -37,6 +40,8 @@ export const useMapStore = create<MapState>((set) => ({
   setCurrentLocation: (location) => set({ currentLocation: location }),
 
   setPlaces: (places) => set({ places }),
+
+  setGooglePlaces: (places) => set({ googlePlaces: places }),
 
   setFilters: (newFilters) =>
     set((state) => ({

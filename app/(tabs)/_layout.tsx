@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { MapPin, Users, MessageCircle, Settings } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -16,6 +17,10 @@ export default function TabsLayout() {
           height: 50 + insets.bottom,
           paddingTop: 8,
         },
+        animation: 'shift',
+        ...(Platform.OS === 'ios' && {
+          presentation: 'card',
+        }),
       }}
     >
       <Tabs.Screen
