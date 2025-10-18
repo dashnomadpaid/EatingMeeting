@@ -9,7 +9,7 @@ export interface Profile extends DBProfile {
 export interface Photo {
   id: string;
   user_id: string;
-  url: string;
+  url: string | number;  // string (URL) 또는 number (require()로 불러온 로컬 이미지)
   is_primary: boolean;
   created_at: string;
 }

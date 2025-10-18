@@ -69,7 +69,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-3-photo',
       user_id: 'mock-3',
-      url: 'https://i.pravatar.cc/400?img=60',
+      url: require('@/assets/images/mockup/박민수.png'),
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -90,7 +90,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-4-photo',
       user_id: 'mock-4',
-      url: 'https://i.pravatar.cc/400?img=12',
+      url: require('@/assets/images/mockup/최지훈.png'),
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -153,7 +153,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-7-photo',
       user_id: 'mock-7',
-      url: 'https://i.pravatar.cc/400?img=47',
+      url: require('@/assets/images/mockup/윤서아.png'),
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -174,7 +174,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-8-photo',
       user_id: 'mock-8',
-      url: 'https://i.pravatar.cc/400?img=33',
+      url: require('@/assets/images/mockup/장민호.png'),
       is_primary: true,
       created_at: new Date().toISOString(),
     },

@@ -54,7 +54,12 @@ export default function CommunityScreen() {
             <View style={styles.cardContent}>
               {/* 왼쪽: Avatar + 정보 */}
               <View style={styles.leftSection}>
-                <Avatar uri={item.primaryPhoto?.url} name={item.display_name} size="medium" />
+                <Avatar 
+                  source={typeof item.primaryPhoto?.url === 'number' ? item.primaryPhoto.url : undefined}
+                  uri={typeof item.primaryPhoto?.url === 'string' ? item.primaryPhoto.url : undefined}
+                  name={item.display_name} 
+                  size="medium" 
+                />
                 <View style={styles.info}>
                   <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>
