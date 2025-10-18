@@ -37,7 +37,8 @@ export default function CommunityScreen() {
 
       {USE_MOCK_DATA && (
         <View style={styles.mockBadge}>
-          <Text style={styles.mockText}>🎭 목업 데이터 (개발용)</Text>
+          <View style={styles.mockDot} />
+          <Text style={styles.mockText}>목업 모드</Text>
         </View>
       )}
 
@@ -45,34 +46,41 @@ export default function CommunityScreen() {
         data={users}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Avatar uri={item.primaryPhoto?.url} name={item.display_name} size="large" />
-              <View style={styles.info}>
-                <Text style={styles.name}>{item.display_name}</Text>
-                {item.distance !== undefined && (
-                  <Text style={styles.distance}>{formatDistance(item.distance)}</Text>
-                )}
-                <Text style={styles.bio} numberOfLines={2}>
-                  {item.bio || '소개가 아직 없습니다'}
-                </Text>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => handleStartChat(item)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.cardContent}>
+              {/* 왼쪽: Avatar + 정보 */}
+              <View style={styles.leftSection}>
+                <Avatar uri={item.primaryPhoto?.url} name={item.display_name} size="medium" />
+                <View style={styles.info}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.display_name}
+                    </Text>
+                    {item.distance !== undefined && (
+                      <Text style={styles.distance}>{formatDistance(item.distance)}</Text>
+                    )}
+                  </View>
+                  <View style={styles.tags}>
+                    {item.diet_tags?.slice(0, 2).map((tag) => (
+                      <Text key={tag} style={styles.tag}>
+                        {tag}
+                      </Text>
+                    ))}
+                    <Text style={styles.budgetTag}>{item.budget_range}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* 오른쪽: 화살표 아이콘 */}
+              <View style={styles.arrowIcon}>
+                <Text style={styles.arrowText}>›</Text>
               </View>
             </View>
-
-            <View style={styles.tags}>
-              {item.diet_tags?.slice(0, 3).map((tag) => (
-                <Tag key={tag} label={tag} type="diet" />
-              ))}
-              <Tag label={item.budget_range} type="budget" />
-            </View>
-
-            <TouchableOpacity
-              style={styles.chatButton}
-              onPress={() => handleStartChat(item)}
-            >
-              <Text style={styles.chatButtonText}>채팅 시작</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         )}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
@@ -111,66 +119,107 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   mockBadge: {
-    backgroundColor: '#FFF3E0',
-    padding: 12,
-    margin: 16,
-    marginBottom: 0,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFE0B2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 107, 53, 0.08)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+  },
+  mockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF6B35',
+    marginRight: 6,
   },
   mockText: {
-    fontSize: 14,
-    color: '#E65100',
-    textAlign: 'center',
+    fontSize: 12,
+    color: '#FF6B35',
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  leftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   info: {
     flex: 1,
     marginLeft: 12,
     justifyContent: 'center',
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   name: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    marginBottom: 2,
+    color: '#000',
+    flex: 1,
+    marginRight: 8,
   },
   distance: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#FF6B35',
-    marginBottom: 4,
-  },
-  bio: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
+    fontWeight: '500',
   },
   tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
   },
-  chatButton: {
-    backgroundColor: '#FF6B35',
-    borderRadius: 12,
-    padding: 14,
+  tag: {
+    fontSize: 12,
+    color: '#666',
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  budgetTag: {
+    fontSize: 12,
+    color: '#FF6B35',
+    backgroundColor: '#FFF8F5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    fontWeight: '500',
+  },
+  arrowIcon: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 8,
   },
-  chatButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+  arrowText: {
+    fontSize: 24,
+    color: '#CCC',
+    fontWeight: '300',
   },
   empty: {
     padding: 48,
