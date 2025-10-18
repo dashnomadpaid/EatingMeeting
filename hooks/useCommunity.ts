@@ -27,7 +27,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-1-photo',
       user_id: 'mock-1',
-      url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=faces',
+      url: 'https://api.dicebear.com/7.x/avataaars/png?seed=Kim-Chulsoo&backgroundColor=b6e3f4',
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -48,7 +48,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-2-photo',
       user_id: 'mock-2',
-      url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop&crop=faces',
+      url: 'https://api.dicebear.com/7.x/avataaars/png?seed=Lee-Younghee&backgroundColor=c0aede',
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -69,7 +69,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-3-photo',
       user_id: 'mock-3',
-      url: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400&h=400&fit=crop&crop=faces',
+      url: '@/assets/images/mockup/박민수.png',
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -90,7 +90,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-4-photo',
       user_id: 'mock-4',
-      url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&h=400&fit=crop&crop=faces',
+      url: '@/assets/images/mockup/최지훈.png',
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -111,7 +111,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-5-photo',
       user_id: 'mock-5',
-      url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop&crop=faces',
+      url: 'https://api.dicebear.com/7.x/avataaars/png?seed=Jung-Sooyeon&backgroundColor=ffdfbf',
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -153,7 +153,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-7-photo',
       user_id: 'mock-7',
-      url: 'https://images.unsplash.com/photo-1548142813-c348350df52b?w=400&h=400&fit=crop&crop=faces',
+      url: '@/assets/images/mockup/윤서아.png',
       is_primary: true,
       created_at: new Date().toISOString(),
     },
@@ -174,7 +174,7 @@ const MOCK_USERS: Profile[] = [
     primaryPhoto: {
       id: 'mock-8-photo',
       user_id: 'mock-8',
-      url: 'https://images.unsplash.com/photo-1615813967515-e1838c1c5116?w=400&h=400&fit=crop&crop=faces',
+      url: '@/assets/images/mockup/장민호.png',
       is_primary: true,
       created_at: new Date().toISOString(),
     },
