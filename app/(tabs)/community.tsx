@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { useUserCards, createOrOpenDM } from '@/hooks/useCommunity';
+import { useUserCards, createOrOpenDM, USE_MOCK_DATA } from '@/hooks/useCommunity';
 import { Avatar } from '@/components/Avatar';
 import { Tag } from '@/components/Tag';
 import { formatDistance } from '@/lib/geo';
@@ -11,6 +11,17 @@ export default function CommunityScreen() {
   const { users, loading } = useUserCards();
 
   const handleStartChat = async (user: Profile) => {
+    // 🎭 목업 모드 체크
+    if (USE_MOCK_DATA) {
+      Alert.alert(
+        '목업 모드',
+        '실제 채팅 기능은 나중에 구현됩니다!\n\n' + `선택한 사용자: ${user.display_name}`,
+        [{ text: '확인', style: 'default' }]
+      );
+      return;
+    }
+
+    // 🔴 실제 채팅 시작
     const threadId = await createOrOpenDM(user.id);
     if (threadId) {
       router.push(`/chat/thread/${threadId}`);
@@ -23,6 +34,12 @@ export default function CommunityScreen() {
         <Text style={styles.title}>밥친구</Text>
         <View />
       </View>
+
+      {USE_MOCK_DATA && (
+        <View style={styles.mockBadge}>
+          <Text style={styles.mockText}>🎭 목업 데이터 (개발용)</Text>
+        </View>
+      )}
 
       <FlatList
         data={users}
@@ -92,6 +109,21 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: 16,
+  },
+  mockBadge: {
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    margin: 16,
+    marginBottom: 0,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+  },
+  mockText: {
+    fontSize: 14,
+    color: '#E65100',
+    textAlign: 'center',
+    fontWeight: '600',
   },
   card: {
     backgroundColor: '#FFFFFF',
