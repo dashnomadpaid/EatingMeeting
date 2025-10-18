@@ -24,7 +24,13 @@ const MOCK_USERS: Profile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     distance: 0.5,
-    primaryPhoto: undefined,
+    primaryPhoto: {
+      id: 'mock-1-photo',
+      user_id: 'mock-1',
+      url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=faces',
+      is_primary: true,
+      created_at: new Date().toISOString(),
+    },
   },
   {
     id: 'mock-2',
@@ -39,7 +45,13 @@ const MOCK_USERS: Profile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     distance: 1.2,
-    primaryPhoto: undefined,
+    primaryPhoto: {
+      id: 'mock-2-photo',
+      user_id: 'mock-2',
+      url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop&crop=faces',
+      is_primary: true,
+      created_at: new Date().toISOString(),
+    },
   },
   {
     id: 'mock-3',
@@ -54,7 +66,13 @@ const MOCK_USERS: Profile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     distance: 0.8,
-    primaryPhoto: undefined,
+    primaryPhoto: {
+      id: 'mock-3-photo',
+      user_id: 'mock-3',
+      url: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400&h=400&fit=crop&crop=faces',
+      is_primary: true,
+      created_at: new Date().toISOString(),
+    },
   },
   {
     id: 'mock-4',
@@ -69,7 +87,13 @@ const MOCK_USERS: Profile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     distance: 1.5,
-    primaryPhoto: undefined,
+    primaryPhoto: {
+      id: 'mock-4-photo',
+      user_id: 'mock-4',
+      url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&h=400&fit=crop&crop=faces',
+      is_primary: true,
+      created_at: new Date().toISOString(),
+    },
   },
   {
     id: 'mock-5',
@@ -84,7 +108,13 @@ const MOCK_USERS: Profile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     distance: 0.3,
-    primaryPhoto: undefined,
+    primaryPhoto: {
+      id: 'mock-5-photo',
+      user_id: 'mock-5',
+      url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop&crop=faces',
+      is_primary: true,
+      created_at: new Date().toISOString(),
+    },
   },
   {
     id: 'mock-6',
@@ -99,7 +129,13 @@ const MOCK_USERS: Profile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     distance: 1.8,
-    primaryPhoto: undefined,
+    primaryPhoto: {
+      id: 'mock-6-photo',
+      user_id: 'mock-6',
+      url: 'https://images.unsplash.com/photo-1574158622682-e40e69881006?w=400&h=400&fit=crop&crop=faces',
+      is_primary: true,
+      created_at: new Date().toISOString(),
+    },
   },
   {
     id: 'mock-7',
@@ -114,7 +150,13 @@ const MOCK_USERS: Profile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     distance: 0.6,
-    primaryPhoto: undefined,
+    primaryPhoto: {
+      id: 'mock-7-photo',
+      user_id: 'mock-7',
+      url: 'https://images.unsplash.com/photo-1548142813-c348350df52b?w=400&h=400&fit=crop&crop=faces',
+      is_primary: true,
+      created_at: new Date().toISOString(),
+    },
   },
   {
     id: 'mock-8',
@@ -129,7 +171,13 @@ const MOCK_USERS: Profile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     distance: 2.0,
-    primaryPhoto: undefined,
+    primaryPhoto: {
+      id: 'mock-8-photo',
+      user_id: 'mock-8',
+      url: 'https://images.unsplash.com/photo-1615813967515-e1838c1c5116?w=400&h=400&fit=crop&crop=faces',
+      is_primary: true,
+      created_at: new Date().toISOString(),
+    },
   },
 ];
 
