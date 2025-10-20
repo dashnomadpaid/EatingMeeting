@@ -130,9 +130,10 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
           )}
         </View>
         <View style={styles.rightSection}>
-          {item.rating !== undefined && (
-            <FilledStar rating={item.rating} size={22} />
-          )}
+          <FilledStar 
+            rating={item.rating !== undefined ? item.rating : 0} 
+            size={22} 
+          />
           {/* 더보기 버튼 */}
           <TouchableOpacity
             style={styles.expandButton}

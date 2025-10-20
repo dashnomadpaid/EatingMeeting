@@ -13,10 +13,11 @@ interface FilledStarProps {
  * 3점 = 60% 채움
  * 2점 = 40% 채움
  * 1점 = 20% 채움
- * 0점 = 0% 채움 (회색 외곽선만)
+ * 0점 = 0% 채움 (그레이로 가득 채워진 별)
+ * 별점 없음 = 0점과 동일 (그레이로 가득 채워진 별)
  * 
  * 구현 방식: 별 아이콘을 겹쳐서 배치
- * 1. 하단 레이어: 회색 아웃라인 별 (배경)
+ * 1. 하단 레이어: 그레이 채워진 별 (배경, #E5E5E5)
  * 2. 상단 레이어: 주황색 채워진 별 (overflow: hidden + bottom offset으로 수직 fill 구현)
  */
 export function FilledStar({ rating, size = 20 }: FilledStarProps) {
@@ -28,11 +29,11 @@ export function FilledStar({ rating, size = 20 }: FilledStarProps) {
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      {/* 배경: 회색 아웃라인 별 */}
+      {/* 배경: 그레이 채워진 별 (아웃라인 + fill) */}
       <View style={styles.backgroundStar}>
         <Star
           size={size}
-          fill="transparent"
+          fill="#E5E5E5"
           color="#E5E5E5"
           strokeWidth={1.5}
         />
