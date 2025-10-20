@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Animated } from 'react-native';
 import { router } from 'expo-router';
-import { useUserCards, createOrOpenDM, USE_MOCK_DATA } from '@/hooks/useCommunity';
+import { useUserCards, createOrOpenDM } from '@/hooks/useCommunity';
+import { useCommunityStore } from '@/state/community.store';
 import { Avatar } from '@/components/Avatar';
 import { Tag } from '@/components/Tag';
 import { formatDistance } from '@/lib/geo';
@@ -9,10 +10,11 @@ import { Profile } from '@/types/models';
 
 export default function CommunityScreen() {
   const { users, loading } = useUserCards();
+  const { useMockData, setUseMockData } = useCommunityStore();
 
   const handleStartChat = async (user: Profile) => {
     // 🎭 목업 모드 체크
-    if (USE_MOCK_DATA) {
+    if (useMockData) {
       Alert.alert(
         '목업 모드',
         '실제 채팅 기능은 나중에 구현됩니다!\n\n' + `선택한 사용자: ${user.display_name}`,
@@ -28,14 +30,27 @@ export default function CommunityScreen() {
     }
   };
 
+  const toggleMockMode = () => {
+    setUseMockData(!useMockData);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>밥친구</Text>
-        <View />
+        <TouchableOpacity 
+          style={[styles.toggleButton, useMockData && styles.toggleButtonActive]}
+          onPress={toggleMockMode}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.toggleDot, useMockData && styles.toggleDotActive]} />
+          <Text style={[styles.toggleText, useMockData && styles.toggleTextActive]}>
+            {useMockData ? 'MOCK' : 'LIVE'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {USE_MOCK_DATA && (
+      {useMockData && (
         <View style={styles.mockBadge}>
           <View style={styles.mockDot} />
           <Text style={styles.mockText}>목업 모드</Text>
@@ -119,6 +134,36 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     lineHeight: 32,
+  },
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
+  toggleButtonActive: {
+    backgroundColor: 'rgba(255, 107, 53, 0.1)',
+  },
+  toggleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#999999',
+  },
+  toggleDotActive: {
+    backgroundColor: '#FF6B35',
+  },
+  toggleText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#999999',
+    letterSpacing: 0.5,
+  },
+  toggleTextActive: {
+    color: '#FF6B35',
   },
   list: {
     padding: 16,

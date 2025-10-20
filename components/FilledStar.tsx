@@ -1,6 +1,5 @@
 import { View, StyleSheet } from 'react-native';
 import { Star } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 interface FilledStarProps {
   rating: number; // 0~5 사이의 별점
@@ -8,13 +7,17 @@ interface FilledStarProps {
 }
 
 /**
- * 별점에 따라 하단부터 주황색으로 채워지는 별 컴포넌트
+ * 별점에 따라 하단부터 수직으로 주황색이 채워지는 별 컴포넌트
  * 5점 = 100% 채움 (전체 주황색)
  * 4점 = 80% 채움
  * 3점 = 60% 채움
  * 2점 = 40% 채움
  * 1점 = 20% 채움
  * 0점 = 0% 채움 (회색 외곽선만)
+ * 
+ * 구현 방식: 별 아이콘을 겹쳐서 배치
+ * 1. 하단 레이어: 회색 아웃라인 별 (배경)
+ * 2. 상단 레이어: 주황색 채워진 별 (overflow: hidden + bottom offset으로 수직 fill 구현)
  */
 export function FilledStar({ rating, size = 20 }: FilledStarProps) {
   // 별점을 0~5 범위로 제한
@@ -22,22 +25,11 @@ export function FilledStar({ rating, size = 20 }: FilledStarProps) {
   
   // 채움 비율 계산 (0~100%)
   const fillPercentage = (clampedRating / 5) * 100;
-  
-  // 그라데이션 색상 설정
-  // fillPercentage보다 아래는 주황색, 위는 투명
-  const gradientColors = fillPercentage > 0 
-    ? ['#FF6B35', '#FF6B35', 'transparent', 'transparent'] as const
-    : ['transparent', 'transparent'] as const;
-  
-  // 그라데이션 위치 설정 (하단부터 채워짐)
-  const gradientLocations = fillPercentage > 0
-    ? [0, fillPercentage / 100, fillPercentage / 100, 1] as const
-    : [0, 1] as const;
 
-  if (fillPercentage === 0) {
-    // 0점인 경우 빈 별만 표시
-    return (
-      <View style={[styles.container, { width: size, height: size }]}>
+  return (
+    <View style={[styles.container, { width: size, height: size }]}>
+      {/* 배경: 회색 아웃라인 별 */}
+      <View style={styles.backgroundStar}>
         <Star
           size={size}
           fill="transparent"
@@ -45,40 +37,47 @@ export function FilledStar({ rating, size = 20 }: FilledStarProps) {
           strokeWidth={1.5}
         />
       </View>
-    );
-  }
-
-  if (fillPercentage === 100) {
-    // 5점인 경우 완전히 채워진 별 표시
-    return (
-      <View style={[styles.container, { width: size, height: size }]}>
-        <Star
-          size={size}
-          fill="#FF6B35"
-          color="#FF6B35"
-          strokeWidth={1.5}
-        />
-      </View>
-    );
-  }
-
-  // 중간 별점은 간단히 채워진 별로 표시 (그라데이션 복잡도 회피)
-  return (
-    <View style={[styles.container, { width: size, height: size }]}>
-      <Star
-        size={size}
-        fill="#FF6B35"
-        color="#FF6B35"
-        strokeWidth={1.5}
-        opacity={fillPercentage / 100}
-      />
+      
+      {/* 전경: 주황색 채워진 별 (하단부터 fillPercentage만큼 보이도록) */}
+      {fillPercentage > 0 && (
+        <View 
+          style={[
+            styles.foregroundStar,
+            { 
+              height: `${fillPercentage}%`,
+              bottom: 0,
+            }
+          ]}
+        >
+          <View style={{ position: 'absolute', bottom: 0 }}>
+            <Star
+              size={size}
+              fill="#FF6B35"
+              color="#FF6B35"
+              strokeWidth={1.5}
+            />
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  backgroundStar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  foregroundStar: {
+    position: 'absolute',
+    left: 0,
+    overflow: 'hidden',
+    width: '100%',
   },
 });

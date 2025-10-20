@@ -177,9 +177,14 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
           
           {/* 모임 참여자 */}
           <View style={styles.participantsSection}>
-            <Text style={styles.participantsLabel}>
-              이 장소에 관심있는 사람들
-            </Text>
+            <View style={styles.participantsHeader}>
+              <Text style={styles.participantsLabel}>
+                이 장소에 관심있는 사람들
+              </Text>
+              <View style={styles.mockupBadge}>
+                <Text style={styles.mockupText}>MOCK-UP</Text>
+              </View>
+            </View>
             {interestedPeople.length > 0 ? (
               <OverlappingAvatars 
                 participants={interestedPeople} 
@@ -344,11 +349,28 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E5E5',
   },
+  participantsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
   participantsLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: '#000000',
-    marginBottom: 12,
+  },
+  mockupBadge: {
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  mockupText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#BBBBBB',
+    letterSpacing: 0.5,
   },
   participantsEmpty: {
     fontSize: 14,

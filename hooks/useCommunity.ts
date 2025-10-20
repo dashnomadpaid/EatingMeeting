@@ -6,9 +6,6 @@ import { supabase } from '@/lib/supabase';
 import { Profile } from '@/types/models';
 import { calculateDistance } from '@/lib/geo';
 
-// ⚠️ 개발용 목업 플래그 (나중에 false로 변경)
-export const USE_MOCK_DATA = true;
-
 // 🎭 목업 데이터 (8명의 페르소나)
 const MOCK_USERS: Profile[] = [
   {
@@ -182,13 +179,13 @@ const MOCK_USERS: Profile[] = [
 ];
 
 export function useUserCards() {
-  const { users, filters, loading, setUsers, setLoading } = useCommunityStore();
+  const { users, filters, loading, useMockData, setUsers, setLoading } = useCommunityStore();
   const { currentLocation } = useMapStore();
   const { session } = useAuthStore();
 
   useEffect(() => {
     // 🎭 목업 모드
-    if (USE_MOCK_DATA) {
+    if (useMockData) {
       setLoading(true);
 
       // 실제처럼 약간의 딜레이 추가
@@ -277,7 +274,7 @@ export function useUserCards() {
     };
 
     loadUsers();
-  }, [session, currentLocation, filters]);
+  }, [session, currentLocation, filters, useMockData]);
 
   return { users, loading };
 }
