@@ -180,7 +180,10 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
           </View>
           
           {/* 관심있는 사람들 프로필 (제목 없이 바로 표시) */}
-          <View style={styles.profilesSection}>
+          <View style={[
+            styles.profilesSection,
+            interestedPeople.length === 0 && styles.emptyProfilesSection
+          ]}>
             {interestedPeople.length > 0 ? (
               <OverlappingAvatars 
                 participants={interestedPeople} 
@@ -374,6 +377,9 @@ const styles = StyleSheet.create({
   },
   profilesSection: {
     marginTop: 16,
+  },
+  emptyProfilesSection: {
+    marginTop: 28,
   },
   noMeetingText: {
     fontSize: 14,
