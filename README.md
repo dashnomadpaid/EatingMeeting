@@ -4,14 +4,17 @@ A React Native + Expo app that helps people find meal buddies without presenting
 
 ## Features
 
-- **Map Discovery**: Browse nearby restaurants on an interactive map with category and budget filters
-- **Community**: Find meal buddies nearby with distance-based filtering
-- **Real-time Chat**: DM and group chats (up to 4 members) with image support
-- **Meal Proposals**: Propose meals at specific restaurants with date/time selection
-- **Accept/Decline System**: Interactive proposal cards with status tracking
-- **Profile Management**: Upload photos, set dietary preferences, budget range, and meal times
-- **Safety Features**: Block users and report inappropriate content
-- **Privacy-Focused**: Only shows approximate distances, never exact locations
+- **Map Discovery**: Browse nearby restaurants on an interactive map with distance filtering
+  - ✅ **Google Places API (New)** powers the primary dataset
+  - Fetches up to 200 restaurants/cafes within a 10km radius with real photos, ratings, and addresses
+  - Falls back to a curated 45-item Seoul list if the API request fails (e.g. missing key or CORS on web)
+- **Community**: Find prospective meal buddies using distance- and preference-based filters
+  - ⚠️ Default experience shows 8 curated mock profiles; toggle `USE_MOCK_DATA` to query Supabase
+- **Realtime Chat**: One-to-one direct messages with live updates (text only)
+- **Meal Proposal Entry Point**: Place detail CTA routes to chat selection, preparing groundwork for proposal workflows
+- **Profile Management**: Upload and manage photos directly from the device gallery
+- **Safety Surfaces**: View and clear your blocked-user list, with locations displayed as approximate distances only
+- **Privacy-Focused**: Location data is obfuscated to ~1km precision; no background tracking
 
 ## Tech Stack
 
@@ -37,14 +40,17 @@ A React Native + Expo app that helps people find meal buddies without presenting
    npm install
    ```
 
-2. **Environment Variables**:
+2. **Environment Variables**  
    The `.env` file is already configured with Supabase credentials:
-   ```
+   ```bash
    EXPO_PUBLIC_SUPABASE_URL=your_url
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your_key
+   EXPO_PUBLIC_GOOGLE_PLACES_API_KEY=your_google_places_api_key  # Required for live restaurant discovery
    ```
 
-3. **Database Setup**:
+   > **Note**: Without `GOOGLE_PLACES_API_KEY`, the Discover tab falls back to 45 mock Seoul restaurants.
+
+3. **Database Setup**
    The database schema has been applied with the following tables:
    - `profiles` - User profiles with approximate location
    - `photos` - Profile photos
@@ -97,19 +103,29 @@ types/             # TypeScript type definitions
 
 ## Key Features Explained
 
-### Mock Restaurant Data
+### Restaurant Discovery (Google Places API Integration)
 
-The app includes 45 Seoul restaurants across various neighborhoods (Gangnam, Hongdae, Itaewon, Myeongdong). Data is client-side filtered for MVP simplicity.
+The Discover tab uses **Google Places API (New)** to fetch real restaurant and cafe data based on your current location. The app:
+- Queries nearby places within a 10km radius using `searchNearby` endpoint
+- Supports pagination to fetch up to 200 results per search
+- Falls back to 45 mock Seoul restaurants if API fails or on web platform
+- Displays real photos, ratings, and addresses from Google
+- Filters results by distance, category, and search query
 
-### Meal Proposal Flow
+**Implementation**: `services/places.google.ts` handles API calls, `app/(tabs)/index.tsx` manages map and list views with real-time place selection.
 
-1. Browse map or community to find restaurants and meal buddies
-2. View restaurant details
-3. Click "Propose Meal Here"
-4. Select a chat thread
-5. Pick date/time and add notes
-6. Other members can Accept or Decline
-7. Status updates appear as system messages with live notifications
+### Community Tab (Mock or Live Profiles)
+
+- The Community (밥친구) tab defaults to **mock personas** (8 seeded profiles) so the UI stays populated in development.
+- Feature flag `USE_MOCK_DATA = true` lives in `hooks/useCommunity.ts`.
+- Distance, budget, and dietary filters apply to both mock and real data.
+- To pull live Supabase profiles, set `USE_MOCK_DATA = false` and ensure `profiles.approx_lat`/`approx_lng` fields are populated. While the flag is `true`, tapping a card surfaces a mock-mode alert instead of opening a DM.
+
+### Meal Proposal CTA (In Progress)
+
+- Place detail pages expose a “같이 식사 제안하기” button that currently routes to the chat thread picker.
+- Proposal creation (`createProposal`) and status cards exist in the codebase but are not yet wired into the navigation flow—no date/time picker UI is presented.
+- Planned next steps: let users compose a proposal (place + schedule + notes) before inserting into Supabase and emitting the corresponding system message.
 
 ### Privacy & Security
 
@@ -120,23 +136,37 @@ The app includes 45 Seoul restaurants across various neighborhoods (Gangnam, Hon
 
 ### Real-time Features
 
-- New messages appear instantly via Supabase Realtime
-- Proposal status updates broadcast to all thread members
-- Thread list updates when new messages arrive
+- New direct messages appear instantly via Supabase Realtime
+- Thread list refreshes automatically on new content
+- Proposal status updates will re-use the same channel machinery once the creation UI is finalized
 
 ## Development Notes
+
+### Google Places API Integration
+
+The app uses **Google Places API (New)** for the Discover tab:
+- **Environment Variable**: `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY` required in `.env`
+- **Endpoint**: `places:searchNearby` with `includedTypes: ['restaurant', 'cafe']`
+- **Features**: Real-time search, photos, ratings, addresses, place types
+- **Fallback**: On error or web platform, uses 45 Seoul mock restaurants
+- **Rate Limits**: Respects API pagination with 1.2s delays between pages
+
+### Community Mock Data
+
+The Community tab uses a **feature flag** for mock vs. real data:
+- **Flag**: `USE_MOCK_DATA = true` in `hooks/useCommunity.ts`
+- **Mock Users**: 8 personas with Korean names, varied preferences
+- **Purpose**: UI development and testing without requiring real Supabase profiles
+- **Transition**: Toggle flag to `false` to use real user profiles from database
 
 ### No PostGIS
 
 The MVP uses simple numeric lat/lng columns with client-side distance calculations (haversine formula) instead of PostGIS for simplicity.
 
-### Push Notifications
+### Push Notifications & Moderation
 
-Expo push tokens are registered and stored, but server-side notification triggers are not implemented in this MVP. Use in-app toasts/badges instead.
-
-### Content Moderation
-
-Placeholder functions exist in `lib/moderation.ts` for future integration with text/image moderation APIs (Perspective API, AWS Rekognition, etc.).
+- Push notifications are not yet registered in-app. `expo-notifications` is installed, but token capture/storage still needs implementation.
+- Content moderation endpoints are not integrated; moderation will be addressed in a later phase.
 
 ## Copy Guidelines
 
@@ -153,14 +183,16 @@ npm run typecheck
 
 ## Future Enhancements
 
-- Real places API integration (Google Places, Yelp)
-- Mapbox SDK for advanced mapping
+- **Community Tab**: Default to live Supabase profiles once geo data is ready
+- **Meal Proposals**: Full creation/respond flow (date/time picker, notes, channel updates)
+- **Advanced Place Filters**: Cuisine type, opening hours, price level from Google
+- Mapbox SDK for advanced mapping features
 - Server-side push notifications via Edge Functions
-- Advanced content moderation with AI
+- AI-assisted moderation pipeline
 - Calendar integration for meal scheduling
 - Group chat enhancements (member management, naming)
 - Video calls for group planning
-- Admin dashboard for moderation
+- Admin dashboard for moderation and analytics
 
 ## License
 

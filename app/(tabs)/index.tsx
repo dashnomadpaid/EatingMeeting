@@ -18,6 +18,7 @@ import { Button } from '@/components/Button';
 import { fetchNearbyPlaces, type Place as GooglePlace } from '@/services/places.google';
 import { MOCK_PLACES } from '@/lib/places';
 import { Tag } from '@/components/Tag';
+import { StarRating } from '@/components/StarRating';
 import { useMapStore } from '@/state/map.store';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,28 +110,40 @@ function CarouselCard({
   isActive: boolean;
   onPress: () => void;
 }) {
-  const distanceFromCenter = Math.abs(index - activeIndex);
-  
-  // Animated values for smooth transitions
-  const animatedScale = useRef(new Animated.Value(isActive ? 1.08 : 0.92)).current;
-  const animatedOpacity = useRef(new Animated.Value(isActive ? 1 : 0.6)).current;
+  // ✅ Always initialize to inactive state (0.92/0.6) to prevent reused cards from flashing
+  // The useEffect will immediately animate to active state if needed
+  const animatedScale = useRef(new Animated.Value(0.92)).current;
+  const animatedOpacity = useRef(new Animated.Value(0.6)).current;
 
-  // Smooth spring animation when active state changes
+  // Animate card state based on isActive prop
   useEffect(() => {
-    Animated.parallel([
+    if (isActive) {
+      // Active card: spring animation for bouncy feel
       Animated.spring(animatedScale, {
-        toValue: isActive ? 1.08 : Math.max(0.92, 1 - distanceFromCenter * 0.04),
-        useNativeDriver: true,
+        toValue: 1.08,
         friction: 8,
         tension: 40,
-      }),
-      Animated.timing(animatedOpacity, {
-        toValue: isActive ? 1 : Math.max(0.6, 1 - distanceFromCenter * 0.15),
-        duration: 300,
         useNativeDriver: true,
-      }),
-    ]).start();
-  }, [isActive, distanceFromCenter, animatedScale, animatedOpacity]);
+      }).start();
+      Animated.timing(animatedOpacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      // Inactive card: smooth timing animation
+      Animated.timing(animatedScale, {
+        toValue: 0.92,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+      Animated.timing(animatedOpacity, {
+        toValue: 0.6,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isActive, animatedScale, animatedOpacity]);
 
   return (
     <Animated.View
@@ -165,17 +178,17 @@ function CarouselCard({
               </Text>
             ) : null}
             <View style={styles.calloutMetaRow}>
-              {typeof item.rating === 'number' ? (
-                <Text style={styles.calloutRating}>
-                  ⭐ {item.rating.toFixed(1)}
-                  {item.userRatingsTotal ? ` (${item.userRatingsTotal})` : ''}
-                </Text>
-              ) : null}
               {item.primaryTypeDisplayName ? (
                 <Tag label={item.primaryTypeDisplayName} type="category" />
               ) : item.types?.length ? (
                 <Tag label={item.types[0]} type="category" />
               ) : null}
+              <StarRating 
+                rating={item.rating} 
+                size={12}
+                showCount={true}
+                userRatingsTotal={item.userRatingsTotal}
+              />
             </View>
           </View>
         </View>
@@ -206,6 +219,15 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
   const selectedGooglePlaceRef = useRef<GooglePlace | null>(storeSelectedGooglePlace);
+
+  // ✅ Optimization: O(1) place lookup with Map
+  const placeIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    places.forEach((place, index) => {
+      map.set(place.id, index);
+    });
+    return map;
+  }, [places]);
 
   useEffect(() => {
     selectedGooglePlaceRef.current = storeSelectedGooglePlace;
@@ -238,10 +260,9 @@ export default function MapScreen() {
       const duration = animated ? 450 : 60;
       markProgrammaticCarouselScroll(duration);
       try {
-        // getItemLayout의 offset을 직접 사용하지 않고,
-        // 카드를 화면 중앙에 배치하기 위한 정확한 offset 계산
-        const cardOffset = (CARD_WIDTH + CARD_SPACING) * index;
-        const scrollOffset = cardOffset; // CARD_PEEK_PADDING이 이미 contentContainerStyle에 있음
+        // ✅ Calculate offset that centers the card perfectly
+        // Each card takes (CARD_WIDTH + CARD_SPACING) of space
+        const scrollOffset = (CARD_WIDTH + CARD_SPACING) * index;
         
         carouselRef.current.scrollToOffset({ 
           offset: scrollOffset, 
@@ -262,6 +283,7 @@ export default function MapScreen() {
     };
   }, [clearProgrammaticCarouselScrollFlag]);
 
+  // ✅ Optimized: Update activeIndex when store selection changes (O(1) Map lookup)
   useEffect(() => {
     if (!storeSelectedGooglePlace) {
       setActiveIndex(-1);
@@ -269,18 +291,24 @@ export default function MapScreen() {
       return;
     }
     
-    // ✅ 선택된 place가 있으면 캐러셀 표시!
+    // ✅ Show carousel when place is selected
     setCarouselVisible(true);
     
-    const index = places.findIndex((place) => place.id === storeSelectedGooglePlace.id);
-    console.log('[Effect] Syncing activeIndex:', index, 'for place:', storeSelectedGooglePlace.id);
+    // ✅ O(1) lookup instead of O(n) findIndex
+    const index = placeIndexMap.get(storeSelectedGooglePlace.id) ?? -1;
+    
+    if (__DEV__) {
+      console.log('[Effect] Syncing activeIndex:', index, 'for place:', storeSelectedGooglePlace.id);
+    }
+    
     if (index !== -1 && index !== activeIndex) {
       pendingProgrammaticScrollIndexRef.current = index;
       markProgrammaticCarouselScroll(600);
       setActiveIndex(index);
     }
-  }, [places, storeSelectedGooglePlace, activeIndex, markProgrammaticCarouselScroll]);
+  }, [places, storeSelectedGooglePlace, activeIndex, placeIndexMap, markProgrammaticCarouselScroll]);
 
+  // Scroll carousel when activeIndex changes (from marker click or list selection)
   useEffect(() => {
     if (!isCarouselVisible || activeIndex < 0) {
       return;
@@ -549,20 +577,29 @@ export default function MapScreen() {
 
   const handleMarkerPress = useCallback(
     (place: GooglePlace) => {
-      console.log('[MarkerPress] Selected place:', place.id, place.name);
+      if (__DEV__) {
+        console.log('[MarkerPress] Selected place:', place.id, place.name);
+      }
       
-      // Find index immediately before any state updates
-      const index = places.findIndex((item) => item.id === place.id);
-      console.log('[MarkerPress] Place index:', index, '/', places.length);
+      // ✅ O(1) lookup with Map
+      const index = placeIndexMap.get(place.id) ?? -1;
+      
+      if (__DEV__) {
+        console.log('[MarkerPress] Place index:', index, '/', places.length);
+      }
       
       if (index === -1) {
-        console.warn('[MarkerPress] Place not found in list!');
+        if (__DEV__) {
+          console.warn('[MarkerPress] Place not found in list!');
+        }
         return;
       }
 
       // Set flag to prevent handleRegionChangeComplete from interfering
       isAnimatingToMarkerRef.current = true;
-      console.log('[MarkerPress] Animation flag set to true');
+      if (__DEV__) {
+        console.log('[MarkerPress] Animation flag set to true');
+      }
 
       // Calculate target region
       const currentDelta = region
@@ -584,15 +621,19 @@ export default function MapScreen() {
       
       // Animate map to selected place smoothly
       if (mapRef.current && 'animateToRegion' in mapRef.current) {
-        console.log('[MarkerPress] Animating to region:', nextRegion);
+        if (__DEV__) {
+          console.log('[MarkerPress] Animating to region:', nextRegion);
+        }
         mapRef.current.animateToRegion(nextRegion, 500);
       }
 
       // Clear animation flag after animation completes
       setTimeout(() => {
         isAnimatingToMarkerRef.current = false;
-        console.log('[MarkerPress] Animation flag cleared');
-      }, 550); // Slightly longer than animation duration
+        if (__DEV__) {
+          console.log('[MarkerPress] Animation flag cleared');
+        }
+      }, 750); // Slightly longer than animation duration
 
       // Scroll carousel to selected card with delay for state update
       setTimeout(() => {
@@ -600,12 +641,16 @@ export default function MapScreen() {
           return;
         }
         try {
-          console.log('[MarkerPress] Scrolling to index:', index);
+          if (__DEV__) {
+            console.log('[MarkerPress] Scrolling to index:', index);
+          }
           if (attemptProgrammaticScrollToIndex(index, true)) {
             pendingProgrammaticScrollIndexRef.current = null;
           }
         } catch (error) {
-          console.warn('[MarkerPress] Scroll failed, retrying...', error);
+          if (__DEV__) {
+            console.warn('[MarkerPress] Scroll failed, retrying...', error);
+          }
           setTimeout(() => {
             if (pendingProgrammaticScrollIndexRef.current !== index) {
               return;
@@ -663,13 +708,15 @@ export default function MapScreen() {
   const getItemLayout = useCallback(
     (_: unknown, index: number) => ({
       length: CARD_WIDTH + CARD_SPACING,
-      offset: CARD_PEEK_PADDING + (CARD_WIDTH + CARD_SPACING) * index,
+      // ✅ Offset matches scrollToOffset calculation - no PEEK_PADDING needed here
+      // because contentContainerStyle already adds the padding
+      offset: (CARD_WIDTH + CARD_SPACING) * index,
       index,
     }),
     [],
   );
 
-  const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 80 }), []);
+  // ✅ Removed duplicate viewabilityConfig (defined in viewabilityConfigPairs below)
 
   const handleViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: Array<{ index?: number | null }> }) => {
@@ -704,7 +751,9 @@ export default function MapScreen() {
         });
         // Smooth animation without setRegion
         if (mapRef.current && 'animateToRegion' in mapRef.current) {
-          console.log('[ViewableChanged] Animating to:', nextPlace.name);
+          if (__DEV__) {
+            console.log('[ViewableChanged] Animating to:', nextPlace.name);
+          }
           mapRef.current.animateToRegion(nextRegion, 500);
         }
       }
@@ -755,7 +804,7 @@ export default function MapScreen() {
           item={item}
           index={index}
           activeIndex={activeIndex}
-          isActive={storeSelectedGooglePlace?.id === item.id}
+          isActive={index === activeIndex} // ✅ O(1) comparison instead of string equality
           onPress={() => handleCalloutPress(item)}
         />
       );
@@ -818,17 +867,20 @@ export default function MapScreen() {
           })}
       </MapView>
       <View style={[styles.topControls, { top: insets.top + 12 }]}>
-        <TouchableOpacity style={styles.listButton} onPress={() => router.push('/map/list')}>
-          <Text style={styles.listButtonText}>목록 보기</Text>
-        </TouchableOpacity>
         {places.length > 1 && (
           <TouchableOpacity 
-            style={[styles.listButton, { marginLeft: 8 }]} 
+            style={styles.listButton} 
             onPress={handleFitAllMarkers}
           >
             <Text style={styles.listButtonText}>전체 보기</Text>
           </TouchableOpacity>
         )}
+        <TouchableOpacity 
+          style={[styles.listButton, places.length > 1 && { marginLeft: 8 }]} 
+          onPress={() => router.push('/map/list')}
+        >
+          <Text style={styles.listButtonText}>목록 보기</Text>
+        </TouchableOpacity>
       </View>
       {placesError ? (
         <View style={[styles.errorBanner, { top: insets.top + 60 }]}>
@@ -964,11 +1016,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#555555',
     marginTop: 4,
-  },
-  calloutRating: {
-    fontSize: 12,
-    color: '#FF6B35',
-    marginRight: 12,
   },
   carouselContainer: {
     position: 'absolute',

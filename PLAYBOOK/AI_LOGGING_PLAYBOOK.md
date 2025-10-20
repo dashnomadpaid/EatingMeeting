@@ -18,6 +18,7 @@ Each log captures the purpose, files changed, key diffs, and commit metadata.
 ```
 /logs/<YYYYMMDD_HHmm>_<agentName>_<shortTopic>.md
 ```
+Use a live timestamp token (e.g. `$(date +%Y%m%d_%H%M)` or `<now>`) when generating the filename so the recorded time matches when the work completes.
 **Examples:**
 - `/logs/20251013_2130_codex_fixSpinnerBug.md`
 - `/logs/20251013_2135_gpt5_updateMapMarkers.md`
@@ -48,6 +49,7 @@ Each log captures the purpose, files changed, key diffs, and commit metadata.
 ## Notes
 - Optional remarks, test results, or known side effects
 ```
+When filling `<Timestamp>` in the header, use the same live timestamp token you used for the filename so the entry reflects the exact completion time.
 
 ---
 

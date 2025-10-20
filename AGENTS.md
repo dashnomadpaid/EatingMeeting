@@ -2,6 +2,7 @@
 
 > ⚠️ Before touching code, read `PLAYBOOK/AI_LOGGING_PLAYBOOK.md`.  
 > ✅ After completing your work, write a `/logs/YYYYMMDD_HHmm_agent_topic.md` entry detailing what you tried, any errors hit, and the final diffs.
+> 💡 Generate the timestamp portion and the header's time stamp using a live time token (for example `$(date +%Y%m%d_%H%M)` or `<now>`) so both reflect the actual completion moment.
 
 ## Root Layout
 - `app/` – Expo Router screens (auth, tab group, feature stacks)
@@ -20,9 +21,9 @@
 - `app/(tabs)/_layout.tsx` sets up the four-tab bottom navigator (Discover, Community, Chat, Settings) with safe-area-aware tab bar sizing.
 
 ## Feature Screens (By Folder)
-- `app/auth/` – OTP login + multi-step onboarding (age confirmation, location prompt, profile form)
-- `app/(tabs)/index.tsx` – Map/list hybrid discover view with mock places and filters
-- `app/(tabs)/community.tsx` – Nearby user cards and “start chat” cta
+- `app/auth/` – OTP login + onboarding (location permission + profile basics)
+- `app/(tabs)/index.tsx` – Map/list hybrid discover view backed by Google Places (fallback to mocks on failure)
+- `app/(tabs)/community.tsx` – Nearby user cards and “start chat” CTA (mock-mode alert when `USE_MOCK_DATA` is true)
 - `app/(tabs)/chat.tsx` – Thread list with last message preview
 - `app/(tabs)/settings.tsx` – Profile summary, navigation to edit/photos, safety links, logout flow
 - `app/chat/` – New chat picker and threaded chat UI with message composer
@@ -75,8 +76,8 @@
 
 ## Map & Places
 - Location stored as rounded coordinates for privacy.
-- `useNearbyPlaces` filters 45-item mock dataset by distance/category/budget/search.
-- Discover screen toggles between map markers and list cards; place detail offers proposal flow.
+- Discover screen pulls nearby Google Places and falls back to the 45-item Seoul dataset when API calls fail or on web (CORS). Filtering utilities remain in `useNearbyPlaces` for mock usage.
+- Place detail screen highlights the venue and links into chat; full proposal flow is still being wired up.
 
 ## Safety & Profile Management
 - Settings screen links to edit profile, photo management, and blocked users.
@@ -96,14 +97,14 @@
 - Native vs. web map rendering is split via `components/NativeMap.native.tsx` (real `react-native-maps`) and `.web.tsx` (placeholder warning).
 
 ### Community & Chat Interplay
-- `hooks/useCommunity.ts` blends session, map location, and Supabase queries to populate cards, filtering out blocked IDs and attaching distance metadata via `calculateDistance`.
-- `hooks/useChat.ts` manages thread hydration, message histories, Supabase realtime subscriptions (`supabase.channel`), and proposal interactions. `state/chat.store.ts` caches threads/messages/proposals and tracks channel lifetimes.
-- `app/chat/thread/[id].tsx` merges proposal slots and messages chronologically, rendering bubbles (`components/ChatBubble.tsx`) and proposal cards (`components/ProposalCard.tsx`); proposals originate from `app/place/[id].tsx` via `createProposal`, `respondToProposal`, and `cancelProposal`.
+- `hooks/useCommunity.ts` blends session, map location, and Supabase queries to populate cards, filtering out blocked IDs and attaching distance metadata via `calculateDistance`. Mock mode short-circuits to seeded personas.
+- `hooks/useChat.ts` manages thread hydration, message histories, and Supabase realtime subscriptions (`supabase.channel`). Proposal helpers exist but the UI currently offers text-only direct messages.
+- `app/chat/thread/[id].tsx` renders chats chronologically with `ChatBubble` components; proposal cards render once upstream creation is enabled.
 
 ### Profile & Safety Flows
 - Settings (`app/(tabs)/settings.tsx`) shows profile data, navigates to edit/photos/blocked screens, and wraps `logout()` in a timeout-protected `Promise.race` before forcing `router.replace('/auth/login')`.
-- Profile editing (`app/profile/edit.tsx`) and photo management (`app/profile/photos.tsx`) sync with Supabase and the store; uploads use `lib/storage.ts` to compress and push to the `profile-photos` bucket (soft cap of six images). Blocked users (`app/settings/blocked-users.tsx`) fetch and unblock entries directly.
-- `LOGOUT_FIX_REPORT.md` documents the regression fix ensuring logout always returns to the login route even if Supabase sign-out lags.
+- Profile editing (`app/profile/edit.tsx`) exposes display name + bio updates; photo management (`app/profile/photos.tsx`) handles uploads via `lib/storage.ts` (soft cap 6 images).
+- Blocked users (`app/settings/blocked-users.tsx`) fetch and unblock entries directly; creating new blocks/reports is pending.
 
 ### Database & Policy Notes
 - `supabase/migrations/20251008142138_create_initial_schema_fixed.sql` defines tables for profiles, photos, blocks, reports, threads, members, messages, and slots, each with tailored RLS policies (thread membership checks dominate messaging/proposal access).

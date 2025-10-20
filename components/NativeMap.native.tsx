@@ -1,5 +1,4 @@
 import React, { forwardRef } from 'react';
-import { Platform } from 'react-native';
 import MapViewNative, {
   Marker as NativeMarker,
   PROVIDER_DEFAULT,
@@ -7,6 +6,7 @@ import MapViewNative, {
   type MapViewProps,
   type Region as NativeRegion,
 } from 'react-native-maps';
+import { Platform } from 'react-native';
 
 type MarkerDescriptor = {
   id: string;
@@ -21,8 +21,8 @@ type NativeMapProps = MapViewProps & {
 
 const NativeMap = forwardRef<MapViewNative, NativeMapProps>(
   ({ markers, provider, showsPointsOfInterest, children, ...rest }, ref) => {
-    const effectiveProvider =
-      provider ?? (Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT);
+    // Use native map provider (Apple Maps on iOS, Google Maps on Android)
+    const effectiveProvider = provider ?? (Platform.OS === 'ios' ? PROVIDER_DEFAULT : PROVIDER_GOOGLE);
     const effectivePoiSetting = showsPointsOfInterest ?? false;
 
     return (

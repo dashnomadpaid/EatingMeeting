@@ -13,60 +13,43 @@ A complete React Native + Expo meal buddy finder app with ~3,800 lines of TypeSc
 
 ### ✅ Authentication & Onboarding
 - Email OTP login (no passwords)
-- 3-step onboarding: age verification, location permission, profile setup
+- Onboarding collects location permission state and basic profile info
 - Automatic session management and route protection
 
 ### ✅ Main Features
 
 #### 1. Map Discovery Tab
-- Interactive map showing 45 Seoul restaurants
-- Filter by category, budget, distance
-- Toggle between map and list view
-- Place detail pages with restaurant info
-- "Propose Meal Here" functionality
+- Interactive map driven by Google Places API (falls back to 45-item Seoul dataset on failure)
+- Filter by distance with list/map toggles
+- Place detail pages surface venue info and participation interest
+- “Propose Meal Here” CTA currently routes to chat selection (proposal form pending)
 
 #### 2. Community Tab
 - Browse nearby users as cards
-- Distance-based filtering (client-side)
-- Budget and dietary preference filters
-- One-tap "Start Chat" to create/open DM
-- Shows approximate distance only (privacy-focused)
+- Distance, budget, and dietary filters
+- Mock dataset (8 personas) enabled by default; live Supabase profiles available when `USE_MOCK_DATA = false`
+- Mock mode displays an informational alert instead of opening a DM
 
 #### 3. Chat Tab
-- Real-time DM and group chats (up to 4 members)
-- Message list sorted by most recent
-- Unread badges and last message previews
-- Thread detail screen with message history
-- Text and image message support
-- System messages for proposals
-- Supabase Realtime subscriptions
+- Real-time direct messages (two participants) via Supabase Realtime
+- Thread list sorted by recency with last-message preview
+- Text-only message composer (no attachments yet)
+- Proposal cards render once creation flow is connected
 
-#### 4. Meal Proposal System
-- Select restaurant from map
-- Choose chat thread to send proposal to
-- Pick date/time with DateTimePicker
-- Add optional notes
-- **Interactive Proposal Cards** in chat:
-  - Shows place name, category, address
-  - Displays proposed date/time
-  - Status badge (proposed/accepted/declined/canceled)
-  - Proposer can Cancel
-  - Other members can Accept/Decline
-  - Status updates trigger system messages
-  - Real-time updates via Supabase Realtime
+#### 4. Meal Proposal System (🚧 In Progress)
+- Database schema & store utilities for proposals are implemented
+- UI presently exposes only the entry point from place detail; scheduling/notes dialog still to come
+- Accept/decline/cancel helpers exist but await integration with the composer flow
 
 #### 5. Profile Management
 - Edit display name and bio
-- Photo management (upload, delete, set primary)
-- Client-side image compression before upload
-- Supabase Storage integration
+- Photo management (upload, delete, mark primary) with client-side compression
+- Supabase Storage integration for the `profile-photos` bucket
 
 #### 6. Settings & Safety
-- View and edit profile
-- Blocked users list with unblock functionality
-- Block user action (from user profiles)
-- Report system (stub for admin review)
-- Logout functionality
+- View profile snapshot, navigate to edit/photos/blocked screens, logout
+- Blocked users screen supports viewing and unblocking existing entries
+- Creating new blocks/reports remains on the roadmap
 
 ### ✅ Database Schema
 All tables created with Row Level Security (RLS):
@@ -87,11 +70,10 @@ All tables created with Row Level Security (RLS):
 - No exact coordinates shown in UI
 
 ### ✅ Real-time Features
-- New messages appear instantly
-- Proposal status updates broadcast live
+- New direct messages appear instantly
 - Thread list updates automatically
-- Typing indicators (structure in place)
-- Read receipts (structure in place)
+- Proposal status updates will reuse the same channels once the creation UI is wired up
+- Typing indicators and read receipts are planned (no current UI)
 
 ## Architecture Highlights
 
@@ -142,9 +124,9 @@ types/            # TypeScript types (2 files)
 ## Known Limitations (By Design)
 
 1. **Icon/Favicon**: Placeholder files need replacement with proper images
-2. **Push Notifications**: Tokens registered but no server-side triggers
-3. **Content Moderation**: Placeholder functions with TODOs for API integration
-4. **Places Data**: Mock dataset (45 restaurants), no real API integration
+2. **Push Notifications**: Token registration/storage not yet implemented
+3. **Content Moderation**: No API integration yet
+4. **Meal Proposal Flow**: UI for create/respond is pending
 5. **Web Build**: May have issues due to react-native-maps (native dependency)
 
 ## Next Steps for Production
@@ -165,11 +147,11 @@ types/            # TypeScript types (2 files)
 ## File Statistics
 - **Total Lines**: ~3,800 TypeScript/TSX
 - **Screens**: 15 routes
-- **Components**: 5 reusable UI components
-- **Hooks**: 4 custom hooks
+- **Components**: 13 reusable UI components
+- **Hooks**: 6 domain hooks
 - **Stores**: 4 Zustand stores
-- **Utils**: 6 library modules
-- **Mock Data**: 45 Seoul restaurants
+- **Utils**: 8 library modules
+- **Mock Data**: 45 Seoul restaurants (fallback set)
 
 ## Success Metrics
 ✅ Complete feature set as specified
