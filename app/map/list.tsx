@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -114,6 +114,9 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
   const fixedCount = hashCode % 5;
   const interestedPeople = MOCK_INTERESTED_PROFILES.slice(0, fixedCount);
   
+  // 디버그 로그: 렌더링 추적
+  console.log(`[${item.name}] Render - isExpanded: ${isExpanded}, rating: ${item.rating}`);
+  
   return (
     <TouchableOpacity
       style={styles.listItemWrapper}
@@ -197,6 +200,11 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
   );
 }
 
+// React.memo로 최적화: isExpanded가 변경된 카드만 리렌더링
+const MemoizedRestaurantCard = memo(RestaurantCard, (prev, next) => {
+  return prev.isExpanded === next.isExpanded && prev.item.id === next.item.id;
+});
+
 export default function MapListScreen() {
   const insets = useSafeAreaInsets();
   const places = useMapStore((state) => state.googlePlaces);
@@ -209,6 +217,9 @@ export default function MapListScreen() {
   };
   
   const toggleExpand = (placeId: string) => {
+    const place = places.find(p => p.id === placeId);
+    console.log(`[TOGGLE] ${place?.name} (${place?.rating}★) - ${expandedId === placeId ? 'CLOSE' : 'OPEN'}`);
+    
     // iOS 스타일의 빠르고 부드러운 애니메이션
     LayoutAnimation.configureNext({
       duration: 250, // 250ms (기본 300ms보다 빠름)
@@ -222,6 +233,8 @@ export default function MapListScreen() {
       },
     });
     setExpandedId(expandedId === placeId ? null : placeId);
+    
+    console.log(`[ANIMATION] LayoutAnimation configured - opacity based, 250ms`);
   };
 
   return (
@@ -237,7 +250,7 @@ export default function MapListScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
         renderItem={({ item }) => (
-          <RestaurantCard
+          <MemoizedRestaurantCard
             item={item}
             isExpanded={expandedId === item.id}
             onPress={handleItemPress}
