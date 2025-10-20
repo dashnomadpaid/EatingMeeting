@@ -160,32 +160,34 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
       {isExpanded && (
         <View style={styles.expandedContent}>
           {/* 해시태그 영역 (카테고리 + 리뷰 수) */}
-          <View style={styles.tagsRow}>
-            {item.types?.[0] && (
-              <View style={styles.hashTag}>
-                <Text style={styles.hashTagText}>#{item.types[0]}</Text>
-              </View>
-            )}
-            {item.userRatingsTotal && (
-              <View style={styles.hashTag}>
-                <Text style={styles.hashTagText}>리뷰 {item.userRatingsTotal.toLocaleString()}개</Text>
-              </View>
-            )}
-            <View style={styles.mockupBadge}>
-              <Text style={styles.mockupText}>MOCK-UP</Text>
+          <View style={styles.expandedHeader}>
+            <View style={styles.tagsRow}>
+              {item.types?.[0] && (
+                <View style={styles.hashTag}>
+                  <Text style={styles.hashTagText}>#{item.types[0]}</Text>
+                </View>
+              )}
+              {item.userRatingsTotal && (
+                <View style={styles.hashTag}>
+                  <Text style={styles.hashTagText}>리뷰 {item.userRatingsTotal.toLocaleString()}개</Text>
+                </View>
+              )}
             </View>
+            <Text style={styles.mockupText}>MOCK-UP</Text>
           </View>
           
           {/* 관심있는 사람들 프로필 (제목 없이 바로 표시) */}
-          {interestedPeople.length > 0 && (
-            <View style={styles.profilesSection}>
+          <View style={styles.profilesSection}>
+            {interestedPeople.length > 0 ? (
               <OverlappingAvatars 
                 participants={interestedPeople} 
                 maxVisible={3}
                 size={36}
               />
-            </View>
-          )}
+            ) : (
+              <Text style={styles.noMeetingText}>모임이 없습니다</Text>
+            )}
+          </View>
         </View>
       )}
     </TouchableOpacity>
@@ -204,7 +206,18 @@ export default function MapListScreen() {
   };
   
   const toggleExpand = (placeId: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    // iOS 스타일의 빠르고 부드러운 애니메이션
+    LayoutAnimation.configureNext({
+      duration: 250, // 250ms (기본 300ms보다 빠름)
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
     setExpandedId(expandedId === placeId ? null : placeId);
   };
 
@@ -310,15 +323,21 @@ const styles = StyleSheet.create({
   },
   expandedContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 6,
     paddingBottom: 16,
     backgroundColor: '#FFFFFF',
+  },
+  expandedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 12,
+    flex: 1,
   },
   hashTag: {
     backgroundColor: '#F8F8F8',
@@ -331,19 +350,19 @@ const styles = StyleSheet.create({
     color: '#666666',
     fontWeight: '500',
   },
-  mockupBadge: {
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
   mockupText: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#BBBBBB',
+    color: '#CCCCCC',
     letterSpacing: 0.5,
+    marginLeft: 8,
   },
   profilesSection: {
-    marginTop: 4,
+    marginTop: 16,
+  },
+  noMeetingText: {
+    fontSize: 14,
+    color: '#BBBBBB',
+    fontWeight: '400',
   },
 });
