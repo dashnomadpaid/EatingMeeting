@@ -156,48 +156,36 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
         </View>
       </View>
       
-      {/* 확장 영역 - 식당 정보 및 모임 참여자 */}
+      {/* 확장 영역 - 해시태그와 프로필 */}
       {isExpanded && (
         <View style={styles.expandedContent}>
-          {/* 간략한 식당 정보 */}
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>카테고리</Text>
-            <Text style={styles.infoValue}>
-              {item.types?.[0] || '정보 없음'}
-            </Text>
+          {/* 해시태그 영역 (카테고리 + 리뷰 수) */}
+          <View style={styles.tagsRow}>
+            {item.types?.[0] && (
+              <View style={styles.hashTag}>
+                <Text style={styles.hashTagText}>#{item.types[0]}</Text>
+              </View>
+            )}
+            {item.userRatingsTotal && (
+              <View style={styles.hashTag}>
+                <Text style={styles.hashTagText}>리뷰 {item.userRatingsTotal.toLocaleString()}개</Text>
+              </View>
+            )}
+            <View style={styles.mockupBadge}>
+              <Text style={styles.mockupText}>MOCK-UP</Text>
+            </View>
           </View>
           
-          {item.userRatingsTotal && (
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>리뷰 수</Text>
-              <Text style={styles.infoValue}>
-                {item.userRatingsTotal.toLocaleString()}개
-              </Text>
-            </View>
-          )}
-          
-          {/* 모임 참여자 */}
-          <View style={styles.participantsSection}>
-            <View style={styles.participantsHeader}>
-              <Text style={styles.participantsLabel}>
-                이 장소에 관심있는 사람들
-              </Text>
-              <View style={styles.mockupBadge}>
-                <Text style={styles.mockupText}>MOCK-UP</Text>
-              </View>
-            </View>
-            {interestedPeople.length > 0 ? (
+          {/* 관심있는 사람들 프로필 (제목 없이 바로 표시) */}
+          {interestedPeople.length > 0 && (
+            <View style={styles.profilesSection}>
               <OverlappingAvatars 
                 participants={interestedPeople} 
                 maxVisible={3}
                 size={36}
               />
-            ) : (
-              <Text style={styles.participantsEmpty}>
-                아직 관심있는 사람이 없어요
-              </Text>
-            )}
-          </View>
+            </View>
+          )}
         </View>
       )}
     </TouchableOpacity>
@@ -324,48 +312,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFFFF',
   },
-  infoSection: {
+  tagsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
   },
-  infoLabel: {
-    fontSize: 14,
+  hashTag: {
+    backgroundColor: '#F8F8F8',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  hashTagText: {
+    fontSize: 13,
     color: '#666666',
     fontWeight: '500',
   },
-  infoValue: {
-    fontSize: 14,
-    color: '#000000',
-    fontWeight: '600',
-  },
-  participantsSection: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-  },
-  participantsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  participantsLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000000',
-  },
   mockupBadge: {
     backgroundColor: '#F5F5F5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   mockupText: {
     fontSize: 10,
@@ -373,9 +343,7 @@ const styles = StyleSheet.create({
     color: '#BBBBBB',
     letterSpacing: 0.5,
   },
-  participantsEmpty: {
-    fontSize: 14,
-    color: '#999999',
-    fontStyle: 'italic',
+  profilesSection: {
+    marginTop: 4,
   },
 });
