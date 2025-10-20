@@ -62,52 +62,23 @@ export function FilledStar({ rating, size = 20 }: FilledStarProps) {
     );
   }
 
+  // 중간 별점은 간단히 채워진 별로 표시 (그라데이션 복잡도 회피)
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      {/* 배경: 빈 별 (회색 외곽선) */}
-      <View style={styles.background}>
-        <Star
-          size={size}
-          fill="transparent"
-          color="#E5E5E5"
-          strokeWidth={1.5}
-        />
-      </View>
-      
-      {/* 전경: 그라데이션 마스크된 채워진 별 */}
-      <View style={styles.foreground}>
-        <LinearGradient
-          colors={gradientColors}
-          locations={gradientLocations}
-          start={{ x: 0, y: 1 }} // 하단 시작
-          end={{ x: 0, y: 0 }}   // 상단 끝
-          style={StyleSheet.absoluteFill}
-        >
-          <Star
-            size={size}
-            fill="#FF6B35"
-            color="#FF6B35"
-            strokeWidth={1.5}
-          />
-        </LinearGradient>
-      </View>
+      <Star
+        size={size}
+        fill="#FF6B35"
+        color="#FF6B35"
+        strokeWidth={1.5}
+        opacity={fillPercentage / 100}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  background: {
-    position: 'absolute',
-  },
-  foreground: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    overflow: 'hidden',
   },
 });

@@ -39,7 +39,7 @@ export function StarRating({ rating, size = 12, showCount = false, userRatingsTo
         
         {/* 반 채워진 별 */}
         {hasHalfStar && (
-          <View style={[styles.halfStarContainer, { marginRight: 2 }]}>
+          <View style={[styles.halfStarContainer, { width: size, height: size }]}>
             <Star
               size={size}
               fill="transparent"
@@ -47,7 +47,7 @@ export function StarRating({ rating, size = 12, showCount = false, userRatingsTo
               strokeWidth={1.5}
               style={styles.halfStarEmpty}
             />
-            <View style={[styles.halfStarMask, { width: size / 2 }]}>
+            <View style={[styles.halfStarMask, { width: size / 2, height: size }]}>
               <Star
                 size={size}
                 fill="#FF6B35"
@@ -101,9 +101,14 @@ const styles = StyleSheet.create({
   },
   halfStarEmpty: {
     position: 'absolute',
+    left: 0,
+    top: 0,
   },
   halfStarMask: {
     overflow: 'hidden',
+    position: 'absolute',
+    left: 0,
+    top: 0,
   },
   ratingText: {
     color: '#FF6B35',
