@@ -114,9 +114,6 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
   const fixedCount = hashCode % 5;
   const interestedPeople = MOCK_INTERESTED_PROFILES.slice(0, fixedCount);
   
-  // 디버그 로그: 렌더링 추적
-  console.log(`[${item.name}] Render - isExpanded: ${isExpanded}, rating: ${item.rating}`);
-  
   return (
     <TouchableOpacity
       style={styles.listItemWrapper}
@@ -202,7 +199,14 @@ function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: Restauran
 
 // React.memo로 최적화: isExpanded가 변경된 카드만 리렌더링
 const MemoizedRestaurantCard = memo(RestaurantCard, (prev, next) => {
-  return prev.isExpanded === next.isExpanded && prev.item.id === next.item.id;
+  // item 전체 비교 (향후 실시간 데이터 업데이트 대비)
+  return (
+    prev.isExpanded === next.isExpanded &&
+    prev.item.id === next.item.id &&
+    prev.item.rating === next.item.rating &&
+    prev.item.name === next.item.name &&
+    prev.item.userRatingsTotal === next.item.userRatingsTotal
+  );
 });
 
 export default function MapListScreen() {
@@ -217,9 +221,6 @@ export default function MapListScreen() {
   };
   
   const toggleExpand = (placeId: string) => {
-    const place = places.find(p => p.id === placeId);
-    console.log(`[TOGGLE] ${place?.name} (${place?.rating}★) - ${expandedId === placeId ? 'CLOSE' : 'OPEN'}`);
-    
     // iOS 스타일의 빠르고 부드러운 애니메이션
     LayoutAnimation.configureNext({
       duration: 250, // 250ms (기본 300ms보다 빠름)
@@ -233,8 +234,6 @@ export default function MapListScreen() {
       },
     });
     setExpandedId(expandedId === placeId ? null : placeId);
-    
-    console.log(`[ANIMATION] LayoutAnimation configured - opacity based, 250ms`);
   };
 
   return (
