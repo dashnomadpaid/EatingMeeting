@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   expandedContent: {
     paddingHorizontal: 16,
-    paddingTop: 6,
+    paddingTop: 2,
     paddingBottom: 16,
     backgroundColor: '#FFFFFF',
   },
