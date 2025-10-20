@@ -109,7 +109,10 @@ interface RestaurantCardProps {
 
 function RestaurantCard({ item, isExpanded, onPress, onToggleExpand }: RestaurantCardProps) {
   // Mock 데이터 사용 (실제 API 연동 전까지)
-  const interestedPeople = MOCK_INTERESTED_PROFILES.slice(0, Math.floor(Math.random() * 5));
+  // 식당 ID 기반으로 고정된 숫자 생성 (0-4명)
+  const hashCode = item.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const fixedCount = hashCode % 5;
+  const interestedPeople = MOCK_INTERESTED_PROFILES.slice(0, fixedCount);
   
   return (
     <TouchableOpacity
