@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Animated } from 'react-native';
 import { router } from 'expo-router';
 import { useUserCards, createOrOpenDM } from '@/hooks/useCommunity';
@@ -11,6 +11,83 @@ import { Profile } from '@/types/models';
 export default function CommunityScreen() {
   const { users, loading } = useUserCards();
   const { useMockData, setUseMockData } = useCommunityStore();
+  
+  // 카드 애니메이션 관리
+  const [animatedUsers, setAnimatedUsers] = useState<Profile[]>([]);
+  const cardAnimations = useRef<Map<string, Animated.Value>>(new Map());
+  const previousMockMode = useRef<boolean>(useMockData);
+  const isAnimating = useRef<boolean>(false);
+  const currentAnimations = useRef<Animated.CompositeAnimation[]>([]);
+
+  // 카드 애니메이션 값 가져오기 또는 생성
+  const getCardAnimation = (userId: string) => {
+    if (!cardAnimations.current.has(userId)) {
+      cardAnimations.current.set(userId, new Animated.Value(0));
+    }
+    return cardAnimations.current.get(userId)!;
+  };
+
+  // 진행 중인 모든 애니메이션 중단
+  const stopAllAnimations = () => {
+    currentAnimations.current.forEach(anim => anim.stop());
+    currentAnimations.current = [];
+    isAnimating.current = false;
+  };
+
+  // 모드 변경 즉시 감지 및 데이터 동기화 (애니메이션보다 우선)
+  useEffect(() => {
+    const modeChanged = previousMockMode.current !== useMockData;
+    
+    if (modeChanged) {
+      previousMockMode.current = useMockData;
+      
+      // 모드가 바뀌면 즉시 기존 데이터 제거 (잘못된 데이터 표시 방지)
+      stopAllAnimations();
+      cardAnimations.current.clear();
+      setAnimatedUsers([]); // 화면 즉시 비우기
+    }
+  }, [useMockData]);
+
+  // 통합된 애니메이션 로직 (users 데이터가 준비되면 페이드인)
+  useEffect(() => {
+    // 로딩 중이거나 애니메이션 진행중이면 대기
+    if (loading || isAnimating.current) {
+      return;
+    }
+
+    // users가 없으면 대기 (빈 배열은 ListEmptyComponent가 처리)
+    if (users.length === 0) {
+      return;
+    }
+
+    // animatedUsers가 비어있으면 새 데이터 페이드인 시작
+    if (animatedUsers.length === 0) {
+      isAnimating.current = true;
+      setAnimatedUsers(users);
+      
+      const fadeInAnimations = users.map((user, index) => {
+        const animation = getCardAnimation(user.id);
+        animation.setValue(0);
+        
+        return Animated.timing(animation, {
+          toValue: 1,
+          duration: 300,
+          delay: index * 60,
+          useNativeDriver: true,
+        });
+      });
+
+      const fadeInComposite = Animated.stagger(0, fadeInAnimations);
+      currentAnimations.current = [fadeInComposite];
+      
+      fadeInComposite.start(({ finished }) => {
+        if (finished) {
+          isAnimating.current = false;
+          currentAnimations.current = [];
+        }
+      });
+    }
+  }, [users, loading]);
 
   const handleStartChat = async (user: Profile) => {
     // 🎭 목업 모드 체크
@@ -50,23 +127,45 @@ export default function CommunityScreen() {
         </TouchableOpacity>
       </View>
 
-      {useMockData && (
-        <View style={styles.mockBadge}>
-          <View style={styles.mockDot} />
-          <Text style={styles.mockText}>목업 모드</Text>
-        </View>
-      )}
-
       <FlatList
-        data={users}
+        data={animatedUsers}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => handleStartChat(item)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.cardContent}>
+        renderItem={({ item }) => {
+          // 🔒 철벽 모드 검증: MOCK 데이터인지 체크
+          const isMockUser = item.id.startsWith('mock-');
+          
+          // LIVE 모드인데 MOCK 데이터면 렌더링 즉시 차단
+          if (!useMockData && isMockUser) {
+            return null;
+          }
+          
+          // MOCK 모드인데 실제 데이터면 렌더링 즉시 차단
+          if (useMockData && !isMockUser) {
+            return null;
+          }
+          
+          const animation = getCardAnimation(item.id);
+          
+          return (
+            <Animated.View
+              style={{
+                opacity: animation,
+                transform: [
+                  {
+                    translateX: animation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-30, 0], // 좌에서 우로 슬라이드
+                    }),
+                  },
+                ],
+              }}
+            >
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => handleStartChat(item)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.cardContent}>
               {/* 왼쪽: Avatar + 정보 */}
               <View style={styles.leftSection}>
                 <Avatar 
@@ -101,12 +200,16 @@ export default function CommunityScreen() {
               </View>
             </View>
           </TouchableOpacity>
-        )}
+        </Animated.View>
+          );
+        }}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>
-              {loading ? '불러오는 중...' : '주변에 밥친구들이 없습니다'}
+              {loading || isAnimating.current || (animatedUsers.length === 0 && users.length > 0) 
+                ? '불러오는 중...' 
+                : '주변에 밥친구들이 없습니다'}
             </Text>
           </View>
         }

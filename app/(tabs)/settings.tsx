@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIn
 import { router } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { Avatar } from '@/components/Avatar';
-import { ChevronRight, User, Image as ImageIcon, Shield, LogOut } from 'lucide-react-native';
+import { ChevronRight, User, Image as ImageIcon, Shield, LogOut, Settings as SettingsIcon } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
@@ -45,25 +45,26 @@ export default function SettingsScreen() {
   };
 
   const handleOpenDebug = () => {
-    router.push('/debug/supabase');
+    router.push('/debug');
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.contentContainer, { paddingBottom: contentPaddingBottom }]}
-    >
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>설정</Text>
         <View />
       </View>
 
-      {loading && (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator size="small" color="#FF6B35" />
-          <Text style={styles.loadingText}>불러오는 중...</Text>
-        </View>
-      )}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: contentPaddingBottom }]}
+      >
+        {loading && (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color="#FF6B35" />
+            <Text style={styles.loadingText}>불러오는 중...</Text>
+          </View>
+        )}
 
       {profile ? (
         <>
@@ -131,10 +132,13 @@ export default function SettingsScreen() {
         <Text style={styles.logoutText}>{loggingOut ? '로그아웃 중...' : '로그아웃'}</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.debugButton} onPress={handleOpenDebug}>
-        <Text style={styles.debugText}>Supabase 디버그 실행</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      <View style={styles.debugButtonContainer}>
+        <TouchableOpacity style={styles.debugButton} onPress={handleOpenDebug} activeOpacity={0.6}>
+          <SettingsIcon color="#B0B0B5" size={16} strokeWidth={1.5} />
+        </TouchableOpacity>
+      </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -142,6 +146,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  scrollView: {
+    flex: 1,
   },
   contentContainer: {
     flexGrow: 1,
@@ -237,18 +244,19 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '600',
   },
-  debugButton: {
-    marginHorizontal: 16,
-    marginBottom: 32,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#1F2937',
+  debugButtonContainer: {
     alignItems: 'center',
+    marginBottom: 32,
   },
-  debugText: {
-    color: '#F9FAFB',
-    fontSize: 15,
-    fontWeight: '600',
+  debugButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: '#D0D0D5',
   },
   placeholderCard: {
     backgroundColor: '#FFFFFF',

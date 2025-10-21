@@ -33,7 +33,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { session, logout, setProfile } = useAuthStore() as any;
   const handleOpenDebug = React.useCallback(() => {
-    router.push('/debug/supabase');
+    router.push('/debug');
   }, []);
 
   // Ensure clean state when entering login screen

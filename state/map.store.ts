@@ -16,12 +16,17 @@ interface MapState {
   filters: PlaceFilters;
   selectedPlace: Place | null;
   selectedGooglePlace: GooglePlace | null;
+  // Map theme for dynamic StatusBar control
+  // 'light' = bright map (day mode) → use dark StatusBar (black text)
+  // 'dark' = dark map (night mode) → use light StatusBar (white text)
+  mapTheme: 'light' | 'dark';
   setCurrentLocation: (location: Coordinates | null) => void;
   setPlaces: (places: Place[]) => void;
   setGooglePlaces: (places: GooglePlace[]) => void;
   setFilters: (filters: Partial<PlaceFilters>) => void;
   selectPlace: (place: Place | null) => void;
   setSelectedGooglePlace: (place: GooglePlace | null) => void;
+  setMapTheme: (theme: 'light' | 'dark') => void;
 }
 
 export const useMapStore = create<MapState>((set) => ({
@@ -30,6 +35,7 @@ export const useMapStore = create<MapState>((set) => ({
   googlePlaces: [],
   selectedPlace: null,
   selectedGooglePlace: null,
+  mapTheme: 'light', // Default to light theme (bright map, dark StatusBar)
   filters: {
     category: null,
     budget: null,
@@ -49,6 +55,8 @@ export const useMapStore = create<MapState>((set) => ({
     })),
 
   selectPlace: (place) => set({ selectedPlace: place }),
+  
+  setMapTheme: (theme) => set({ mapTheme: theme }),
   setSelectedGooglePlace: (place) =>
     set((state) => {
       const prev = state.selectedGooglePlace;

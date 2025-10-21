@@ -11,6 +11,7 @@ import {
   Image,
   Dimensions,
   Animated,
+  useColorScheme,
 } from 'react-native';
 import MapView, { Marker, type Region } from '@/components/NativeMap';
 import { useCurrentLocation } from '@/hooks/useMap';
@@ -216,9 +217,11 @@ export default function MapScreen() {
   const storeSelectedGooglePlace = useMapStore((state) => state.selectedGooglePlace);
   const setSelectedGooglePlace = useMapStore((state) => state.setSelectedGooglePlace);
   const setGooglePlaces = useMapStore((state) => state.setGooglePlaces);
+  const setMapTheme = useMapStore((state) => state.setMapTheme);
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
   const selectedGooglePlaceRef = useRef<GooglePlace | null>(storeSelectedGooglePlace);
+  const colorScheme = useColorScheme(); // Get system color scheme (light/dark)
 
   // ✅ Optimization: O(1) place lookup with Map
   const placeIndexMap = useMemo(() => {
@@ -232,6 +235,32 @@ export default function MapScreen() {
   useEffect(() => {
     selectedGooglePlaceRef.current = storeSelectedGooglePlace;
   }, [storeSelectedGooglePlace]);
+
+  // 🌓 Detect map theme (light/dark) based on system color scheme and time of day
+  // iOS: Apple Maps auto-adjusts theme based on system settings
+  // Android/Web: Google Maps auto-adjusts theme based on system settings
+  // StatusBar needs to adapt: light map → dark StatusBar, dark map → light StatusBar
+  useEffect(() => {
+    const detectMapTheme = () => {
+      // Priority 1: System color scheme (iOS/Android dark mode)
+      if (colorScheme === 'dark') {
+        setMapTheme('dark');
+        return;
+      }
+
+      // Priority 2: Time-based detection (6 AM - 6 PM = light, else dark)
+      const currentHour = new Date().getHours();
+      const isDayTime = currentHour >= 6 && currentHour < 18;
+      setMapTheme(isDayTime ? 'light' : 'dark');
+    };
+
+    detectMapTheme();
+
+    // Re-check every hour in case time crosses day/night boundary
+    const interval = setInterval(detectMapTheme, 60 * 60 * 1000); // 1 hour
+
+    return () => clearInterval(interval);
+  }, [colorScheme, setMapTheme]);
 
   const clearProgrammaticCarouselScrollFlag = useCallback(() => {
     if (programmaticScrollTimeoutRef.current) {
