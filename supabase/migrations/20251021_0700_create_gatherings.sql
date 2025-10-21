@@ -127,6 +127,10 @@ BEGIN
     UPDATE gatherings
     SET current_count = current_count + 1
     WHERE id = NEW.gathering_id;
+  ELSIF TG_OP = 'UPDATE' AND OLD.status = 'left' AND NEW.status = 'joined' THEN
+    UPDATE gatherings
+    SET current_count = current_count + 1
+    WHERE id = NEW.gathering_id;
   ELSIF TG_OP = 'UPDATE' AND OLD.status = 'joined' AND NEW.status = 'left' THEN
     UPDATE gatherings
     SET current_count = current_count - 1

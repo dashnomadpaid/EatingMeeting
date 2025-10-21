@@ -1,4 +1,4 @@
-import { DBProfile, DBMessage, DBSlot } from './db';
+import { DBProfile, DBMessage, DBSlot, DBGathering, DBGatheringParticipant } from './db';
 
 export interface Profile extends DBProfile {
   photos?: Photo[];
@@ -33,6 +33,19 @@ export interface Slot extends DBSlot {
 }
 
 export type SlotStatus = 'proposed' | 'accepted' | 'declined' | 'canceled';
+
+export interface Gathering extends DBGathering {
+  host?: Profile;
+  participants?: GatheringParticipant[];
+  participantProfiles?: Profile[];
+  thread?: Thread;
+}
+
+export interface GatheringParticipant extends DBGatheringParticipant {
+  user?: Profile;
+}
+
+export type GatheringStatus = 'open' | 'closed' | 'completed' | 'cancelled';
 
 export interface CommunityFilters {
   maxDistance: number;

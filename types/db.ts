@@ -40,6 +40,7 @@ export interface DBReport {
 export interface DBThread {
   id: string;
   is_group: boolean;
+  gathering_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -74,4 +75,32 @@ export interface DBSlot {
   notes: string;
   status: 'proposed' | 'accepted' | 'declined' | 'canceled';
   created_at: string;
+}
+
+export interface DBGathering {
+  id: string;
+  place_id: string;
+  place_name: string;
+  place_address: string | null;
+  place_photo_url: string | null;
+  place_lat: number | null;
+  place_lng: number | null;
+  host_id: string;
+  title: string;
+  description: string;
+  scheduled_at: string;
+  max_participants: number;
+  current_count: number;
+  status: 'open' | 'closed' | 'completed' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DBGatheringParticipant {
+  id: string;
+  gathering_id: string;
+  user_id: string;
+  status: 'joined' | 'left';
+  is_host: boolean;
+  joined_at: string;
 }
